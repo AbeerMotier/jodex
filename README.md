@@ -26,7 +26,8 @@
 
 ## التشغيل محليًا
 
-**المتطلبات:** Node.js ‏22 (≥ 20.9)، Docker، و[Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) (`brew install supabase/tap/supabase` أو `npx supabase`).
+**المتطلبات:** Git، و Node.js ‏22 أو أحدث، و Docker Desktop (شغّال). أداة Supabase CLI تُثبَّت تلقائيًا مع `npm ci`
+(مثبتة كإصدار محدد في `devDependencies`) وتُستدعى بـ `npx supabase`.
 
 ```bash
 npm ci
@@ -35,16 +36,14 @@ npx playwright install chromium   # متصفح لتوليد تقارير PDF و�
 # 1) Supabase المحلي (Postgres + Auth + Storage) — يطبّق الترحيلات في supabase/migrations تلقائيًا
 npx supabase start
 
-# 2) متغيرات البيئة: انسخ القالب واملأ المفاتيح من مخرجات الأمر التالي
-cp .env.example .env.local
-npx supabase status -o env      # API_URL ← NEXT_PUBLIC_SUPABASE_URL · ANON_KEY · SERVICE_ROLE_KEY
-openssl rand -base64 48         # قيمة APP_SECRET
+# 2) ملف .env.local تلقائيًا (عنوان Supabase ومفاتيحه + أسرار عشوائية) — لا يستبدل قيمًا موجودة
+npm run setup:env
 
 # 3) البيانات الأساسية (idempotent) — تُطبع كلمات مرور الحسابات الجديدة مرة واحدة فقط، احفظها فورًا
 npm run db:seed
 
 # 4) التطبيق
-npm run dev                     # http://localhost:3000
+npm run dev                     # http://localhost:3000/login
 ```
 
 - لإعادة ضبط قاعدة البيانات المحلية بالكامل: `npm run db:reset` ثم `npm run db:seed`.
