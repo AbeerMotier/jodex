@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "جُودِكس: تشغيل التطوير (npm run dev)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "serverReadyAction": {
+        "pattern": "- Local:.+(https?://\\S+)",
+        "uriFormat": "%s/login",
+        "action": "openExternally"
+      }
+    },
+    {
+      "name": "جُودِكس: البيانات الأساسية (npm run db:seed)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run db:seed"
+    }
+  ]
+}

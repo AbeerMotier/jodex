@@ -1,0 +1,7 @@
+# نهايات أسطر موحّدة (LF) على كل الأنظمة بما فيها Windows
+* text=auto eol=lf
+*.woff2 binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary

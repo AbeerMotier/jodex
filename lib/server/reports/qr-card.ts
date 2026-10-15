@@ -1,0 +1,56 @@
+import 'server-only';
+import { esc } from './html';
+import { embeddedFontCss } from './pdf';
+
+/**
+ * بطاقة QR للطباعة (A5 عمودي) بنفس تصميم بطاقة صفحة «رموز QR»:
+ * رأس أخضر بالشعار، رمز QR حقيقي بإطار زوايا، «امسح لتقييم النظافة»، اسم الدورة والموقع والرابط.
+ */
+export async function qrCardDocument(card: { svg: string; name: string; location: string; displayUrl: string }): Promise<string> {
+  const fonts = await embeddedFontCss();
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(card.name)} — رمز QR</title><style>
+${fonts}
+@page{size:A5 portrait;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:'IBM Plex Sans Arabic',sans-serif;color:#2F4F44;display:flex;align-items:center;justify-content:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.card{width:118mm;border:1px solid #E3EAE6;border-radius:26px;overflow:hidden;background:#fff;display:flex;flex-direction:column;align-items:center;text-align:center}
+.head{position:relative;width:100%;background:#55957A;display:flex;justify-content:center;padding:26px 0 96px;overflow:hidden}
+.head i{position:absolute;border-radius:50%;pointer-events:none}
+.head .r1{width:250px;height:250px;left:-110px;top:-95px;border:1.4px solid rgba(255,255,255,.35)}
+.head .r2{width:220px;height:170px;right:-95px;top:14px;border:1.4px solid rgba(255,255,255,.3)}
+.head .r3{width:150px;height:150px;left:42%;top:-118px;border:1.4px solid rgba(255,255,255,.25)}
+.logo{position:relative;display:flex;flex-direction:column;align-items:center;color:#fff;gap:2px}
+.logo .latin{display:flex;align-items:center;font-size:46px;font-weight:700;line-height:1;letter-spacing:-1.5px}
+.logo .lens{position:relative;width:34px;height:34px;margin:0 2px 0 1px;display:inline-block}
+.logo .ring{position:absolute;inset:0;border:7px solid #fff;border-radius:50%}
+.logo .core{position:absolute;inset:10px;background:#C5E2CC;border-radius:50%}
+.logo .handle{position:absolute;width:7px;height:15px;background:#fff;border-radius:3.5px;right:-2px;bottom:-9px;transform:rotate(-42deg)}
+.logo .ar{font-size:22px;font-weight:700;line-height:1.4}
+.qr{position:relative;margin-top:-72px;background:#fff;border-radius:26px;padding:18px;box-shadow:0 14px 30px -14px rgba(47,79,68,.4)}
+.qr .c{position:absolute;width:26px;height:26px;border:0 solid #55957A}
+.qr .tr{top:7px;right:7px;border-top-width:4px;border-right-width:4px;border-top-right-radius:12px}
+.qr .tl{top:7px;left:7px;border-top-width:4px;border-left-width:4px;border-top-left-radius:12px}
+.qr .br{bottom:7px;right:7px;border-bottom-width:4px;border-right-width:4px;border-bottom-right-radius:12px}
+.qr .bl{bottom:7px;left:7px;border-bottom-width:4px;border-left-width:4px;border-bottom-left-radius:12px}
+.qr .code{width:66mm;height:66mm;padding:6px}
+.qr .code svg{display:block;width:100%;height:100%}
+.body{display:flex;flex-direction:column;align-items:center;gap:12px;padding:22px 22px 26px}
+.chip{background:#E6F2EA;color:#3F7A62;border-radius:999px;padding:5px 18px;font-size:17px;font-weight:600}
+.name{font-size:24px;font-weight:700}
+.loc{font-size:16px;color:#687D74;margin-top:2px}
+.url{direction:ltr;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#687D74;word-break:break-all;max-width:100%}
+</style></head><body>
+<div class="card">
+  <div class="head"><i class="r1"></i><i class="r2"></i><i class="r3"></i>
+    <div class="logo" aria-label="جُودِكس"><div class="latin" dir="ltr"><span>J</span><span class="lens"><i class="ring"></i><i class="core"></i><i class="handle"></i></span><span>dex</span></div><div class="ar">جُودِكس</div></div>
+  </div>
+  <div class="qr"><span class="c tr"></span><span class="c tl"></span><span class="c br"></span><span class="c bl"></span><div class="code">${card.svg}</div></div>
+  <div class="body">
+    <span class="chip">امسح لتقييم النظافة</span>
+    <div><div class="name">${esc(card.name)}</div><div class="loc">${esc(card.location)}</div></div>
+    <div class="url">${esc(card.displayUrl)}</div>
+  </div>
+</div>
+</body></html>`;
+}

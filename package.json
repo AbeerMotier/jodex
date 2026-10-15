@@ -1,0 +1,62 @@
+{
+  "name": "jodex",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "جُودِكس — نظام تقييم ومتابعة نظافة دورات المياه",
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "db:migrate": "supabase migration up",
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push",
+    "db:seed": "tsx scripts/seed.ts",
+    "admin": "tsx scripts/admin-cli.ts",
+    "cron:tick": "tsx scripts/cron-tick.ts",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-sans-arabic": "^5.2.6",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.3",
+    "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
+    "file-type": "^21.0.0",
+    "heic-convert": "^2.1.0",
+    "next": "16.4.1",
+    "playwright-core": "1.56.1",
+    "qrcode": "^1.5.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "server-only": "^0.0.1",
+    "sharp": "^0.34.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.15.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^9.36.0",
+    "eslint-config-next": "16.4.1",
+    "jsqr": "^1.4.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.4"
+  }
+}

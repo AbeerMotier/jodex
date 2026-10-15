@@ -1,0 +1,18 @@
+# تشغيل التطبيق في حاوية فوق Supabase (محلي عبر `npx supabase start` أو مشروع Supabase مُدار).
+# Supabase هو الخلفية الوحيدة (Postgres + Auth + Storage) — لا حاويات Postgres أو MinIO منفصلة.
+#   cp .env.example .env.production   # ثم املأ القيم
+#   docker compose up --build
+services:
+  app:
+    build: .
+    image: jodex:latest
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Riyadh
+    ports:
+      - "3000:3000"
+    # للوصول إلى Supabase المحلي على جهاز المضيف استخدم http://host.docker.internal:54321
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
