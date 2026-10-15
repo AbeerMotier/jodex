@@ -1,0 +1,37 @@
+# =====================================================================
+# جُودِكس — نشر تجريبي على Render (Blueprint)
+# Render ← New ← Blueprint ← اختر هذا المستودع. يُبنى التطبيق من Dockerfile (يتضمن Chromium لتقارير PDF).
+# قيم Supabase الثلاث تُدخلها يدويًا عند الإنشاء (sync: false)، والأسرار تُولَّد تلقائيًا.
+# رابط الخدمة (https://<اسم>.onrender.com) يُستخدم تلقائيًا للوحة الإدارة وروابط QR (RENDER_EXTERNAL_URL).
+# =====================================================================
+services:
+  - type: web
+    name: jodex
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /login
+    autoDeploy: true
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: APP_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: AUTH_EMAIL_DOMAIN
+        value: jodex.local
+      - key: TZ
+        value: Asia/Riyadh
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: DEMO_MODE
+        value: "false"
+      # الخطة المجانية 512MB: متصفح PDF لكل طلب يُغلق بعده
+      - key: JODEX_PDF_LOW_MEMORY
+        value: "true"

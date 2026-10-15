@@ -16,6 +16,7 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "setup:env": "tsx scripts/setup-env.ts",
+    "setup:cloud": "tsx scripts/setup-env.ts --cloud",
     "db:migrate": "supabase migration up",
     "db:reset": "supabase db reset",
     "db:push": "supabase db push",

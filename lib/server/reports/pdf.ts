@@ -6,23 +6,34 @@ import { env } from '../env';
 
 let browserPromise: Promise<Browser> | null = null;
 
+async function launchBrowser(): Promise<Browser> {
+  const { chromium } = await import('playwright-core');
+  return chromium.launch({
+    headless: true,
+    executablePath: env.chromiumPath,
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--font-render-hinting=none',
+      ...(env.pdfLowMemory ? ['--no-zygote', '--disable-gpu', '--disable-extensions', '--renderer-process-limit=1'] : []),
+    ],
+  });
+}
+
+/** متصفح مشترك يبقى مفتوحًا بين الطلبات (أسرع) — إلا في وضع الذاكرة المنخفضة */
 async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
-    browserPromise = (async () => {
-      const { chromium } = await import('playwright-core');
-      const browser = await chromium.launch({
-        headless: true,
-        executablePath: env.chromiumPath,
-        args: ['--no-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none'],
-      });
-      browser.on('disconnected', () => {
+    browserPromise = launchBrowser()
+      .then((browser) => {
+        browser.on('disconnected', () => {
+          browserPromise = null;
+        });
+        return browser;
+      })
+      .catch((e) => {
         browserPromise = null;
+        throw e;
       });
-      return browser;
-    })().catch((e) => {
-      browserPromise = null;
-      throw e;
-    });
   }
   return browserPromise;
 }
@@ -56,7 +67,8 @@ export async function htmlToPdf(
   html: string,
   options: { format?: 'A4' | 'A5' | 'A6'; landscape?: boolean; margin?: string } = {},
 ): Promise<Buffer> {
-  const browser = await getBrowser();
+  // وضع الذاكرة المنخفضة: متصفح لهذا الطلب فقط يُغلق بعده (يحرر الذاكرة فورًا)
+  const browser = env.pdfLowMemory ? await launchBrowser() : await getBrowser();
   const context = await browser.newContext({ locale: 'ar-SA' });
   try {
     // لا طلبات شبكة إطلاقًا: كل المحتوى (الخطوط والرموز) مضمّن في الصفحة
@@ -76,5 +88,6 @@ export async function htmlToPdf(
     return Buffer.from(pdf);
   } finally {
     await context.close();
+    if (env.pdfLowMemory) await browser.close();
   }
 }

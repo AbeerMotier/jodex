@@ -22,12 +22,13 @@ export const env = {
   get serviceRoleKey() {
     return required('SUPABASE_SERVICE_ROLE_KEY');
   },
+  /** نطاق الإدارة؛ على Render يُستخدم الرابط العام للخدمة تلقائيًا إن لم يُضبط */
   get appBaseUrl() {
-    return (read('APP_BASE_URL') ?? 'http://localhost:3000').replace(/\/$/, '');
+    return (read('APP_BASE_URL') ?? read('RENDER_EXTERNAL_URL') ?? 'http://localhost:3000').replace(/\/$/, '');
   },
   /** النطاق المستخدم في روابط QR العامة (قد يختلف عن نطاق الإدارة) */
   get publicAppUrl() {
-    return (read('PUBLIC_APP_URL') ?? read('APP_BASE_URL') ?? 'http://localhost:3000').replace(/\/$/, '');
+    return (read('PUBLIC_APP_URL') ?? read('APP_BASE_URL') ?? read('RENDER_EXTERNAL_URL') ?? 'http://localhost:3000').replace(/\/$/, '');
   },
   get appSecret() {
     const s = required('APP_SECRET');
@@ -51,6 +52,10 @@ export const env = {
   get trustedProxyHops() {
     const n = Number(read('TRUSTED_PROXY_HOPS') ?? 1);
     return Number.isInteger(n) && n >= 0 && n <= 5 ? n : 1;
+  },
+  /** وضع ذاكرة منخفضة لتوليد PDF (خوادم 512MB): متصفح لكل طلب يُغلق بعده */
+  get pdfLowMemory() {
+    return read('JODEX_PDF_LOW_MEMORY') === 'true';
   },
   get chromiumPath() {
     return read('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH');

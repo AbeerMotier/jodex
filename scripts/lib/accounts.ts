@@ -102,6 +102,12 @@ export async function upsertAccount(
       email_confirm: true,
       app_metadata: { jodex_role: fields.role, jodex_username: username },
     });
+    if (error && (error.code === 'email_address_invalid' || (/email/i.test(error.message) && /invalid/i.test(error.message)))) {
+      throw new Error(
+        `رفض Supabase Auth البريد الداخلي (${authEmailDomain()}). اضبط AUTH_EMAIL_DOMAIN في .env.local على نطاق حقيقي ` +
+          'تملكه (مثل users.your-domain.sa) ثم أعد التشغيل. البريد داخلي فقط ولا يُرسل إليه شيء.',
+      );
+    }
     if (error || !data.user) throw error ?? new Error('createUser failed');
     authUserId = data.user.id;
   }

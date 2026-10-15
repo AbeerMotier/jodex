@@ -7,10 +7,10 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 next-env.d.ts
+# ملفات البيئة والأسرار (عدا القالب)
 .env
-.env.local
-.env.*.local
-.env.test
+.env.*
+!.env.example
 supabase/.temp/
 supabase/.branches/
 .DS_Store
