@@ -45,7 +45,7 @@ function buildCsp(nonce: string) {
   const isDev = process.env.NODE_ENV === 'development';
   let supabaseOrigin = '';
   try {
-    supabaseOrigin = new URL(runtimeEnv('NEXT_PUBLIC_SUPABASE_URL') ?? '').origin;
+    supabaseOrigin = new URL(runtimeEnv('NEXT_PUBLIC_SUPABASE_URL') ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').origin;
   } catch {
     supabaseOrigin = '';
   }
@@ -80,8 +80,9 @@ export async function proxy(request: NextRequest) {
   }
 
   // إعدادات Supabase ناقصة (ملف .env.local غير موجود أو فارغ): صفحة توضح الحل بدل خطأ غامض
-  const supabaseUrl = runtimeEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseKey = runtimeEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  // وقت التشغيل أولًا (Docker/Render)، ثم القيمة المضمّنة وقت البناء (منصات مثل Netlify/Vercel)
+  const supabaseUrl = runtimeEnv('NEXT_PUBLIC_SUPABASE_URL') ?? (process.env.NEXT_PUBLIC_SUPABASE_URL || undefined);
+  const supabaseKey = runtimeEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY') ?? (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined);
   if (!supabaseUrl || !supabaseKey) {
     console.error('[jodex] NEXT_PUBLIC_SUPABASE_URL أو NEXT_PUBLIC_SUPABASE_ANON_KEY غير مضبوط — نفّذ npm run setup:cloud أو npm run setup:env');
     return new NextResponse(MISSING_ENV_PAGE, {
