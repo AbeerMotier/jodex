@@ -46,7 +46,7 @@ npx supabase link --project-ref abcd1234
 ```
 npx supabase db push
 ```
-اكتب `Y` للتأكيد. سترى `Applying migration …` سبع مرات ثم `Finished supabase db push.`
+اكتب `Y` للتأكيد. سترى `Applying migration …` ثماني مرات ثم `Finished supabase db push.`
 هذا ينشئ الجداول والصلاحيات (RLS) والدوال وحاوية الصور الخاصة والمهام المجدولة (إنشاء الجولات وإغلاق الفائتة تلقائيًا).
 
 **4) امنع التسجيل الذاتي** (الحسابات تُنشأ من النظام فقط)
