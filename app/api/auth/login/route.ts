@@ -64,7 +64,8 @@ export async function POST(req: NextRequest) {
       throw new ApiError(
         503,
         'server_config',
-        'تعذّر على الخادم قراءة قاعدة البيانات. تحقق من SUPABASE_SERVICE_ROLE_KEY ومن تشغيل ملفات الجداول، ثم أعد النشر.',
+        'تعذّر على الخادم قراءة قاعدة البيانات. تحقق من SUPABASE_SERVICE_ROLE_KEY ومن تشغيل ملفات الجداول، ثم أعد النشر. ' +
+          `(${(profileErr.code ? `${profileErr.code}: ` : '') + profileErr.message.slice(0, 120)})`,
       );
     }
 
