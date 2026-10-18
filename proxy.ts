@@ -25,7 +25,7 @@ const MISSING_ENV_PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta c
 <pre dir="ltr" style="background:#EAF3EC;border-radius:12px;padding:12px 14px;margin:0 0 6px;text-align:left">npm run setup:cloud
 npm run dev</pre>
 <p style="margin:0 0 14px;font-size:14px;color:#687D74">(أو <code dir="ltr">npm run setup:env</code> بدل الأول إن كنت تستخدم Supabase المحلي عبر Docker). تأكد أن الملف <code dir="ltr">.env.local</code> موجود بجانب <code dir="ltr">package.json</code>.</p>
-<p style="margin:0"><b>على السيرفر (Render):</b> أضف القيم في Environment ثم أعد النشر.</p>
+<p style="margin:0"><b>على السيرفر:</b> Render ← Environment ثم Manual Deploy. Netlify ← Project configuration ← Environment variables (النطاق All scopes ولكل سياقات النشر، وبدون علامة Secret على قيم <code dir="ltr">NEXT_PUBLIC_…</code>) ثم Deploys ← Trigger deploy ← Clear cache and deploy site، لأن هذه القيم تُضمَّن وقت البناء.</p>
 </main></body></html>`;
 
 /** قراءة متغيرات البيئة وقت التشغيل (لا تُضمَّن قيم وقت البناء في الحزمة) */
