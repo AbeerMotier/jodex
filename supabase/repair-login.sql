@@ -1,27 +1,23 @@
 -- =====================================================================
 -- جُودِكس — إصلاح دخول حساب واحد وضبط كلمة مروره
--- عدّل السطرين في «الإعدادات» فقط، ثم الصق الملف كاملًا في Supabase SQL Editor واضغط Run.
+-- عدّل السطرين في «الإعدادات» داخل الملف فقط، ثم الصق الملف كاملًا (بدون تظليل جزء منه) في Supabase SQL Editor واضغط Run.
 -- يصلح كل ما يمنع الدخول: كلمة المرور، البريد الداخلي، التأكيد، الحظر، القفل،
 -- الحقول الفارغة التي ترفضها Supabase Auth، وسجل الهوية (identity).
 -- في النهاية يعرض فحصًا للحساب: كل الأعمدة يجب أن تكون true.
--- =====================================================================
-
--- ======================= الإعدادات (عدّل هنا فقط) =======================
-create temp table if not exists jodex_repair (username text, password text);
-truncate jodex_repair;
-insert into jodex_repair values ('admin', 'اكتب_كلمة_المرور_هنا');
 -- =====================================================================
 
 create extension if not exists pgcrypto with schema extensions;
 
 do $$
 declare
-  v_username text := (select lower(btrim(username)) from jodex_repair);
-  v_password text := (select password from jodex_repair);
+  -- ======================= الإعدادات (عدّل هنا فقط) =======================
+  v_username text := 'admin';
+  v_password text := 'اكتب_كلمة_المرور_هنا';
+  -- =====================================================================
   v_user public.users%rowtype;
 begin
   if v_password is null or length(v_password) < 8 or v_password = 'اكتب_كلمة_المرور_هنا' then
-    raise exception 'اكتب كلمة مرور جديدة (8 أحرف أو أكثر) في قسم الإعدادات أعلى الملف';
+    raise exception 'اكتب كلمة مرور جديدة (8 أحرف أو أكثر) في قسم الإعدادات (السطر v_password)';
   end if;
   select * into v_user from public.users where username = v_username;
   if not found then
@@ -61,18 +57,24 @@ begin
 
   update public.users set is_active = true where id = v_user.id;
   delete from public.login_attempts where username = v_user.username;
+
+  if not exists (select 1 from auth.users a
+                  where a.id = v_user.id and a.encrypted_password = extensions.crypt(v_password, a.encrypted_password)) then
+    raise exception 'تعذّر ضبط كلمة المرور للحساب "%"', v_username;
+  end if;
 end $$;
 
--- الفحص: كل الأعمدة يجب أن تكون true
+-- الفحص: كل الحسابات الفعّالة — كل الأعمدة يجب أن تكون true
 select u.username                                   as "اسم المستخدم",
        u.role                                       as "الدور",
        u.is_active                                  as active,
        a.email is not null                          as email_ok,
        a.email_confirmed_at is not null             as confirmed,
        a.banned_until is null                       as not_banned,
-       a.encrypted_password = extensions.crypt(r.password, a.encrypted_password) as password_ok,
+       a.encrypted_password like '$2%'              as password_hashed,
        exists (select 1 from auth.identities i where i.user_id = a.id) as identity_ok,
        (a.raw_app_meta_data->>'jodex_role') = u.role::text as role_ok
-  from jodex_repair r
-  join public.users u on u.username = lower(btrim(r.username))
-  join auth.users a on a.id = u.id;
+  from public.users u
+  join auth.users a on a.id = u.id
+ where u.is_active
+ order by u.role, u.username;
