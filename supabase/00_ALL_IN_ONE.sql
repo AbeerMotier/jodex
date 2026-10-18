@@ -9,7 +9,7 @@ begin;
 do $$
 begin
   if to_regclass('public.users') is not null then
-    raise exception 'الجداول موجودة مسبقًا في هذا المشروع — لا تحتاج هذا الملف. انتقل إلى manual-seed.sql';
+    raise exception 'الجداول موجودة مسبقًا في هذا المشروع — لا تحتاج هذا الملف. انتقل إلى ملف البيانات';
   end if;
 end $$;
 

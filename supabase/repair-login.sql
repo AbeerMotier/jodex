@@ -21,7 +21,7 @@ begin
   end if;
   select * into v_user from public.users where username = v_username;
   if not found then
-    raise exception 'الحساب "%" غير موجود في public.users — شغّل three-accounts.sql أولًا', v_username;
+    raise exception 'الحساب "%" غير موجود في public.users — أنشئه أولًا', v_username;
   end if;
 
   update auth.users
