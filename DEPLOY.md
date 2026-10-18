@@ -141,6 +141,7 @@ npm run db:seed
 1. `supabase/00_ALL_IN_ONE.sql` — الجداول والصلاحيات والدوال (مرة واحدة؛ إن كانت موجودة يرفض بأمان).
 2. `supabase/manual-seed.sql` — المباني ودورات المياه وبنود التقييم والحسابات (يعرض كلمات المرور مرة واحدة).
 3. (اختياري) `supabase/three-accounts.sql` — ثلاثة حسابات فقط بأسماء وكلمات مرور تختارها.
+4. (عند تعذّر الدخول) `supabase/repair-login.sql` — يصلح حسابًا واحدًا ويضبط كلمة مروره، ويعرض فحصًا لكل ما يلزم للدخول.
 
 **Netlify ← Project configuration ← Environment variables:** عشرة متغيرات، كلها All scopes ونفس القيمة لكل السياقات:
 `NEXT_PUBLIC_SUPABASE_URL`، `NEXT_PUBLIC_SUPABASE_ANON_KEY` (بدون Secret — تُضمَّن وقت البناء)،

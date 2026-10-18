@@ -53,20 +53,45 @@ export async function POST(req: NextRequest) {
       throw new ApiError(423, 'locked', lockedMessage(new Date(attempt.locked_until), now));
     }
 
-    const { data: profile } = await svc
+    const { data: profile, error: profileErr } = await svc
       .from('users')
       .select('id, full_name, role, is_active')
       .eq('username', username)
       .maybeSingle();
+    if (profileErr) {
+      // مفتاح الخادم خاطئ أو الجداول غير منشأة — ليست مشكلة كلمة مرور
+      console.error('[jodex] login: users lookup failed', profileErr.message);
+      throw new ApiError(
+        503,
+        'server_config',
+        'تعذّر على الخادم قراءة قاعدة البيانات. تحقق من SUPABASE_SERVICE_ROLE_KEY ومن تشغيل ملفات الجداول، ثم أعد النشر.',
+      );
+    }
 
     const supabase = await createUserClient();
     let success = false;
     if (profile?.is_active) {
-      const { data: authUser } = await svc.auth.admin.getUserById(profile.id);
+      const { data: authUser, error: authErr } = await svc.auth.admin.getUserById(profile.id);
       const email = authUser?.user?.email;
-      if (email) {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password: body.password });
-        success = !error && Boolean(data.session);
+      if (authErr || !email) {
+        console.error('[jodex] login: auth user lookup failed', authErr?.message ?? 'no email');
+        throw new ApiError(
+          503,
+          'auth_account_broken',
+          'الحساب موجود لكن بياناته في Supabase Auth ناقصة. شغّل supabase/repair-login.sql ثم أعد المحاولة.',
+        );
+      }
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: body.password });
+      success = !error && Boolean(data.session);
+      if (error && error.code !== 'invalid_credentials') {
+        // خطأ من خدمة الدخول نفسها (حساب تالف، مزوّد Email معطّل، مفتاح عام خاطئ…)
+        console.error('[jodex] login: Supabase Auth error', error.code, error.message);
+        throw new ApiError(
+          503,
+          'auth_service_error',
+          `رفضت خدمة الدخول في Supabase الطلب (${error.code ?? error.status ?? 'unknown'}). ` +
+            'تأكد أن مزوّد Email مفعّل وأن NEXT_PUBLIC_SUPABASE_ANON_KEY صحيح، أو شغّل supabase/repair-login.sql.',
+        );
       }
     } else {
       // توحيد زمن الاستجابة تقريبًا حتى لا يُستدل على وجود الحساب
