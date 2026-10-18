@@ -24,10 +24,11 @@ import {
   loadPrimaryMonitors,
   loadRestroomRefs,
   PERIOD_TEXT,
+  inScope,
   restroomScope,
   type CommonQuery,
 } from './common';
-import { evaluationEntry, roomView, roundEntry } from './presenters';
+import { areaView, evaluationEntry, roomView, roundEntry } from './presenters';
 
 const RECENT_LIMIT = 4;
 const TOP_PERFORMERS = 4;
@@ -48,7 +49,7 @@ export async function buildDashboard(user: SessionUser, q: CommonQuery, source: 
   ]);
   const roomMap = new Map(rooms.map((r) => [r.id, r]));
   const scopedRooms = scope ? rooms.filter((r) => scope.has(r.id)) : rooms;
-  const scopedMonitors = monitors.filter((m) => !scope || scope.has(m.restroom_id));
+  const scopedMonitors = monitors.filter((m) => inScope(scope, m.restroom_ids));
 
   const showContractor = source === 'all' || source === 'contractor';
   const showSupervisor = source === 'all' || source === 'supervisor';
@@ -123,7 +124,7 @@ export async function buildDashboard(user: SessionUser, q: CommonQuery, source: 
   const performance = showContractor
     ? topByQuality(monitorPerformance(scopedMonitors, rounds, evaluations, source === 'contractor' ? 'contractor' : 'all'), TOP_PERFORMERS).map((p) => ({
         ...p,
-        restroom: roomView(roomMap, p.restroomId),
+        restroom: areaView(roomMap, scope ? p.restroomIds.filter((id) => scope.has(id)) : p.restroomIds),
       }))
     : null;
 

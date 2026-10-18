@@ -55,10 +55,10 @@ describe('seed', () => {
 
   it('omar.z موجود مرة واحدة كنائب لـ turki', async () => {
     const svc = serviceClient();
-    const { data: rows } = await svc.from('users').select('id, role, monitor_kind, substitute_for_id, restroom_id').eq('username', 'omar.z');
+    const { data: rows } = await svc.from('users').select('id, role, monitor_kind, substitute_for_id').eq('username', 'omar.z');
     expect(rows).toHaveLength(1);
-    const { data: turki } = await svc.from('users').select('id, monitor_kind, restroom_id').eq('username', 'turki').single();
-    expect(rows![0]).toMatchObject({ role: 'contractor_monitor', monitor_kind: 'substitute', substitute_for_id: turki!.id, restroom_id: null });
+    const { data: turki } = await svc.from('users').select('id, monitor_kind').eq('username', 'turki').single();
+    expect(rows![0]).toMatchObject({ role: 'contractor_monitor', monitor_kind: 'substitute', substitute_for_id: turki!.id });
     expect(turki!.monitor_kind).toBe('primary');
     const snap = await snapshot();
     expect(snap.omarAuth).toBe(1);
@@ -66,12 +66,13 @@ describe('seed', () => {
 
   it('لكل دورة مياه نشطة رمز QR فعال واحد، ومراقب أساسي واحد فقط', async () => {
     const svc = serviceClient();
-    const { data: rooms } = await svc.from('restrooms').select('id, code').eq('is_active', true);
+    const { data: rooms } = await svc.from('restrooms').select('id, code, monitor_id').eq('is_active', true);
     const { data: codes } = await svc.from('qr_codes').select('restroom_id, token').eq('is_active', true);
-    const { data: primaries } = await svc.from('users').select('restroom_id').eq('monitor_kind', 'primary').eq('is_active', true);
+    const { data: primaries } = await svc.from('users').select('id').eq('monitor_kind', 'primary');
+    const primaryIds = new Set((primaries ?? []).map((p) => p.id));
     for (const r of rooms ?? []) {
       expect(codes!.filter((c) => c.restroom_id === r.id)).toHaveLength(1);
-      expect(primaries!.filter((p) => p.restroom_id === r.id).length).toBeLessThanOrEqual(1);
+      if (r.monitor_id) expect(primaryIds.has(r.monitor_id)).toBe(true);
     }
     // الرابط العام لا يكشف أي معرّف داخلي: رمز عشوائي ≥ 128 بت
     for (const c of codes ?? []) expect(c.token).toMatch(/^[A-Za-z0-9_-]{32,}$/);

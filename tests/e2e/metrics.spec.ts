@@ -220,7 +220,7 @@ test('لوحة الأدمن: أحدث الجولات 4 بالضبط ومجاور
     expect(mon.length).toBeGreaterThan(0);
     expect(sup.length).toBeGreaterThan(0);
     for (const c of mon) expect(c).toMatchObject({ color: rgb('#1F5F99'), background: rgb('#E4EEF8'), text: 'مراقب المقاول' });
-    for (const c of sup) expect(c).toMatchObject({ color: rgb('#A12B2B'), background: rgb('#F8E4E4'), text: 'مشرف الوزارة' });
+    for (const c of sup) expect(c).toMatchObject({ color: rgb('#A12B2B'), background: rgb('#F8E4E4'), text: 'المشرف الميداني' });
 
     // ألوان الفئة في الرسم ومفتاحه: المراقب أزرق والمشرف أحمر
     const legend = page.getByTestId('chart-legend');
@@ -228,7 +228,7 @@ test('لوحة الأدمن: أحدث الجولات 4 بالضبط ومجاور
     expect(await swatch('contractor')).toBe(rgb('#2F6FB0'));
     expect(await swatch('supervisor')).toBe(rgb('#C24545'));
     await expect(legend).toContainText('مراقب المقاول');
-    await expect(legend).toContainText('مشرف الوزارة');
+    await expect(legend).toContainText('المشرف الميداني');
     const bars = await page
       .getByTestId('comparison-chart')
       .locator('[data-series] > div')

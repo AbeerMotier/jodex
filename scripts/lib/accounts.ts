@@ -46,8 +46,15 @@ export interface ProfileFields {
   full_name: string;
   role: 'admin' | 'supervisor' | 'contractor_monitor';
   monitor_kind: 'primary' | 'substitute' | null;
-  restroom_id: string | null;
+  /** للمراقب الأساسي: دورات المياه المسؤول عنها (تُسند إليه وتُنزع من مسؤولها السابق) */
+  restroom_ids?: string[];
   substitute_for_id: string | null;
+}
+
+async function assignRestrooms(svc: SupabaseClient, userId: string, fields: ProfileFields) {
+  if (fields.monitor_kind !== 'primary' || !fields.restroom_ids?.length) return;
+  const { error } = await svc.from('restrooms').update({ monitor_id: userId }).in('id', fields.restroom_ids);
+  if (error) throw error;
 }
 
 /**
@@ -73,11 +80,11 @@ export async function upsertAccount(
         full_name: fields.full_name,
         role: fields.role,
         monitor_kind: fields.monitor_kind,
-        restroom_id: fields.restroom_id,
         substitute_for_id: fields.substitute_for_id,
       })
       .eq('id', existing.id);
     if (error) throw error;
+    await assignRestrooms(svc, existing.id, fields);
     await svc.auth.admin.updateUserById(existing.id, {
       app_metadata: { jodex_role: fields.role, jodex_username: username },
     });
@@ -118,13 +125,13 @@ export async function upsertAccount(
     full_name: fields.full_name,
     role: fields.role,
     monitor_kind: fields.monitor_kind,
-    restroom_id: fields.restroom_id,
     substitute_for_id: fields.substitute_for_id,
   });
   if (insErr) {
     if (!orphan) await svc.auth.admin.deleteUser(authUserId);
     throw insErr;
   }
+  await assignRestrooms(svc, authUserId, fields);
   return { id: authUserId, created: true, password };
 }
 

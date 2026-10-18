@@ -90,7 +90,7 @@ export function contractorAverage(rounds: MetricRound[]): number | null {
   return average(rounds.filter((r) => r.status === 'submitted').map((r) => r.quality_score));
 }
 
-/** متوسط التقييم العام لمشرفي الوزارة */
+/** متوسط التقييم العام للمشرفين الميدانيين */
 export function supervisorAverage(evaluations: MetricEvaluation[]): number | null {
   return average(evaluations.map((e) => e.score));
 }
@@ -195,18 +195,19 @@ export function classify(cp: number | null, q: number | null): Classification | 
 export interface MonitorRef {
   id: string;
   full_name: string;
-  restroom_id: string;
+  /** دورات المياه المسند إليه (المراقب الأساسي قد يكون مسؤولًا عن مبنى كامل) */
+  restroom_ids: string[];
 }
 
 export interface MonitorPerformance {
   monitorId: string;
   name: string;
-  restroomId: string;
+  restroomIds: string[];
   /** متوسط درجة الالتزام للجولات المستحقة */
   cp: number | null;
   /** متوسط جودة جولاته المكتملة */
   a: number | null;
-  /** متوسط تقييم المشرف لنفس الموقع */
+  /** متوسط تقييم المشرف لنفس المواقع */
   s: number | null;
   /** الجودة = متوسط المتاح من (a, s) — أو a فقط عند فلتر «تقييم المقاول» */
   q: number | null;
@@ -227,12 +228,13 @@ export function monitorPerformance(
     const mine = rounds.filter((r) => r.assigned_monitor_id === m.id);
     const cp = average(mine.filter(isDue).map((r) => r.compliance_score));
     const a = contractorAverage(mine);
-    const s = supervisorAverage(evaluations.filter((e) => e.restroom_id === m.restroom_id));
+    const rooms = new Set(m.restroom_ids);
+    const s = supervisorAverage(evaluations.filter((e) => rooms.has(e.restroom_id)));
     const q = mode === 'contractor' ? a : average([a, s]);
     return {
       monitorId: m.id,
       name: m.full_name,
-      restroomId: m.restroom_id,
+      restroomIds: m.restroom_ids,
       cp,
       a,
       s,

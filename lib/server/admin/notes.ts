@@ -15,7 +15,7 @@ export interface NotesQuery extends CommonQuery {
   limit: number;
 }
 
-/** ملاحظات مشرفي الوزارة (للاطلاع فقط — لا تعديل للحالات) */
+/** ملاحظات المشرفين الميدانيين (للاطلاع فقط — لا تعديل للحالات) */
 export async function listNotes(q: NotesQuery) {
   const client = await createUserClient();
   const rooms = await loadRestroomRefs(client, { includeInactive: true });

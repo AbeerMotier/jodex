@@ -222,17 +222,24 @@ describe('مواءمة الجولات المفتوحة مع الإسناد ال�
     expect(rows.map((r) => [r.shift, r.status])).toEqual([['am', 'submitted']]);
     await db.from('restrooms').update({ is_active: true }).eq('id', world.rooms.c.id);
 
-    // نقل المراقب الأساسي لدورة ب: m2 يُعطَّل ويُسند مراقب جديد ← الجولات المفتوحة تُسند للجديد
+    // نقل دورة ب إلى المراقب m3 (m2 يُعطَّل) ← m3 مسؤول عن دورتين، والجولات المفتوحة تُسند له
     const next = '2041-05-03';
     await db.rpc('ensure_daily_rounds', { p_date: next });
     await db.from('users').update({ is_active: false }).eq('id', world.users.m2.id);
-    await db.from('users').update({ restroom_id: world.rooms.b.id }).eq('id', world.users.m3.id);
+    expect((await db.from('restrooms').update({ monitor_id: world.users.m3.id }).eq('id', world.rooms.b.id)).error).toBeNull();
     await db.rpc('ensure_daily_rounds', { p_date: next });
-    rows = (await qaRounds(next)).filter((r) => r.restroom_id === world.rooms.b.id);
-    expect(rows).toHaveLength(2);
+    rows = (await qaRounds(next)).filter((r) => r.restroom_id === world.rooms.b.id || r.restroom_id === world.rooms.c.id);
+    expect(rows).toHaveLength(4);
     const { data: assigned } = await db.from('rounds').select('assigned_monitor_id').in('id', rows.map((r) => r.id));
     expect(assigned!.every((r) => r.assigned_monitor_id === world.users.m3.id)).toBe(true);
-    // دورة ج بلا مراقب أساسي الآن ← لا جولات مفتوحة لها
+
+    // دورة ج بلا مراقب مسؤول ← تُحذف جولاتها المفتوحة
+    await db.from('restrooms').update({ monitor_id: null }).eq('id', world.rooms.c.id);
+    await db.rpc('ensure_daily_rounds', { p_date: next });
     expect((await qaRounds(next)).filter((r) => r.restroom_id === world.rooms.c.id)).toHaveLength(0);
+
+    // المسؤول عن دورة المياه يجب أن يكون مراقبًا أساسيًا
+    const bad = await db.from('restrooms').update({ monitor_id: world.users.sup.id }).eq('id', world.rooms.c.id);
+    expect(bad.error?.message).toContain('restroom_monitor_must_be_primary');
   });
 });

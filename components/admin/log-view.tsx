@@ -23,7 +23,7 @@ const STATUS_OPTIONS = [
 ];
 const KIND_OPTIONS = [
   { value: 'round', label: 'جولات مراقبي المقاول' },
-  { value: 'supervisor', label: 'تقييمات مشرفي الوزارة' },
+  { value: 'supervisor', label: 'تقييمات المشرفين الميدانيين' },
 ];
 const PERIODS: Period[] = ['today', 'week', 'month'];
 const GRID = 'grid grid-cols-[104px_62px_minmax(160px,1.3fr)_104px_86px_minmax(118px,1fr)_92px_56px_136px] gap-2.5';
@@ -38,7 +38,7 @@ export function LogView() {
 
   const employees = [
     ...(options?.monitors ?? []).map((m) => ({ value: m.id, label: `${m.name} · ${m.kind === 'substitute' ? 'مراقب نائب' : 'مراقب المقاول'}` })),
-    ...(options?.supervisors ?? []).map((s) => ({ value: s.id, label: `${s.name} · مشرف الوزارة` })),
+    ...(options?.supervisors ?? []).map((s) => ({ value: s.id, label: `${s.name} · المشرف الميداني` })),
   ];
   const activeLabels = [
     f.get('kind') && KIND_OPTIONS.find((k) => k.value === f.get('kind'))?.label,
@@ -68,7 +68,7 @@ export function LogView() {
     <>
       <PageHeader
         title="سجل الجولات"
-        sub={`${PERIOD_LABEL[f.period]} · جولات مراقبي المقاول وتقييمات مشرفي الوزارة`}
+        sub={`${PERIOD_LABEL[f.period]} · جولات مراقبي المقاول وتقييمات المشرفين الميدانيين`}
         actions={<Toolbar filters={filters} activeCount={activeLabels.length} exportUrl={(format) => `/api/admin/export?report=log&format=${format}&${apiQuery}`} exportName="jodex-rounds-log" />}
       />
       <ActiveFilters items={activeLabels} onClear={() => f.set({ kind: null, building: null, floor: null, restroom: null, status: null, employee: null })} />

@@ -74,12 +74,12 @@ export async function createQaWorld(label = 'QA'): Promise<QaWorld> {
     if (!res.password) throw new Error(`account ${fields.username} already existed`);
     users[key] = { id: res.id, username: fields.username, password: res.password, name: fields.full_name };
   };
-  const base = { monitor_kind: null, restroom_id: null, substitute_for_id: null } as const;
+  const base = { monitor_kind: null, substitute_for_id: null } as const;
   await add('admin', { ...base, username: `qa${lower}.admin`, full_name: 'أدمن الاختبار', role: 'admin' });
-  await add('m1', { username: `qa${lower}.m1`, full_name: 'مراقب الاختبار الأول', role: 'contractor_monitor', monitor_kind: 'primary', restroom_id: rooms.a.id, substitute_for_id: null });
-  await add('m2', { username: `qa${lower}.m2`, full_name: 'مراقب الاختبار الثاني', role: 'contractor_monitor', monitor_kind: 'primary', restroom_id: rooms.b.id, substitute_for_id: null });
-  await add('m3', { username: `qa${lower}.m3`, full_name: 'مراقب الاختبار الثالث', role: 'contractor_monitor', monitor_kind: 'primary', restroom_id: rooms.c.id, substitute_for_id: null });
-  await add('sub', { username: `qa${lower}.sub`, full_name: 'نائب الاختبار', role: 'contractor_monitor', monitor_kind: 'substitute', restroom_id: null, substitute_for_id: users.m1.id });
+  await add('m1', { username: `qa${lower}.m1`, full_name: 'مراقب الاختبار الأول', role: 'contractor_monitor', monitor_kind: 'primary', restroom_ids: [rooms.a.id], substitute_for_id: null });
+  await add('m2', { username: `qa${lower}.m2`, full_name: 'مراقب الاختبار الثاني', role: 'contractor_monitor', monitor_kind: 'primary', restroom_ids: [rooms.b.id], substitute_for_id: null });
+  await add('m3', { username: `qa${lower}.m3`, full_name: 'مراقب الاختبار الثالث', role: 'contractor_monitor', monitor_kind: 'primary', restroom_ids: [rooms.c.id], substitute_for_id: null });
+  await add('sub', { username: `qa${lower}.sub`, full_name: 'نائب الاختبار', role: 'contractor_monitor', monitor_kind: 'substitute', substitute_for_id: users.m1.id });
   await add('sup', { ...base, username: `qa${lower}.sup`, full_name: 'مشرف الاختبار', role: 'supervisor' });
   await add('sup2', { ...base, username: `qa${lower}.sup2`, full_name: 'مشرف الاختبار الثاني', role: 'supervisor' });
 

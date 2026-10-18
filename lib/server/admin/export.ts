@@ -24,7 +24,7 @@ const TITLES: Record<Report, string> = {
   dashboard: 'تقرير لوحة المؤشرات',
   log: 'تقرير سجل الجولات',
   feedback: 'تقرير تقييمات المستفيدين',
-  notes: 'تقرير ملاحظات مشرفي الوزارة',
+  notes: 'تقرير ملاحظات المشرفين الميدانيين',
   staff: 'تقرير أداء الموظفين',
 };
 
@@ -50,7 +50,7 @@ function entryCells(r: EntryView): Cell[] {
     `${dayLabel(r.date)}${r.time ? ` · ${timeHM(r.time)}` : ''}`,
     r.typeLabel,
     {
-      html: `${esc(r.employee.name)}<br>${chip(r.employee.role === 'supervisor' ? 'مشرف الوزارة' : 'مراقب المقاول', r.employee.role === 'supervisor' ? 'supervisor' : 'monitor').html}${
+      html: `${esc(r.employee.name)}<br>${chip(r.employee.role === 'supervisor' ? 'المشرف الميداني' : 'مراقب المقاول', r.employee.role === 'supervisor' ? 'supervisor' : 'monitor').html}${
         r.onBehalfOf ? `<div class="muted">بالنيابة عن ${esc(r.onBehalfOf)}</div>` : ''
       }`,
     },
@@ -84,7 +84,7 @@ function entryRow(r: EntryView): (string | number | null)[] {
     r.time ? timeHM(r.time) : '—',
     r.typeLabel,
     r.employee.name,
-    r.employee.role === 'supervisor' ? 'مشرف الوزارة' : 'مراقب المقاول',
+    r.employee.role === 'supervisor' ? 'المشرف الميداني' : 'مراقب المقاول',
     r.onBehalfOf ?? '',
     r.restroom.building,
     r.restroom.floor,
@@ -113,7 +113,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
         );
       }
       if (d.quality.contractor) summary.push(['متوسط نتيجة جولات مراقبي المقاول', `${pctText(d.quality.contractor.value)} · ${d.quality.contractor.sub}`]);
-      if (d.quality.supervisor) summary.push(['متوسط التقييم العام لمشرفي الوزارة', `${pctText(d.quality.supervisor.value)} · ${d.quality.supervisor.sub}`]);
+      if (d.quality.supervisor) summary.push(['متوسط التقييم العام للمشرفين الميدانيين', `${pctText(d.quality.supervisor.value)} · ${d.quality.supervisor.sub}`]);
       if (d.quality.beneficiary) summary.push(['رضا المستفيدين', `${pctText(d.quality.beneficiary.value)} · ${d.quality.beneficiary.sub}`]);
       if (d.quality.compliance)
         summary.push(['نسبة التزام الجولات', `كلية ${pctText(d.quality.compliance.overall)} · صباحية ${pctText(d.quality.compliance.am)} · مسائية ${pctText(d.quality.compliance.pm)}`]);
@@ -180,7 +180,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
       return {
         q,
         meta,
-        subtitle: 'جولات مراقبي المقاول وتقييمات مشرفي الوزارة',
+        subtitle: 'جولات مراقبي المقاول وتقييمات المشرفين الميدانيين',
         pdfBody: table(['التاريخ والوقت', 'النوع', 'الموظف', 'المبنى', 'الدور', 'دورة المياه', 'نوع التقييم', 'النتيجة', 'الحالة'], data.rows.map(entryCells)),
         sheets: [{ name: 'سجل الجولات', columns: ENTRY_COLUMNS, rows: data.rows.map(entryRow) }],
       };
@@ -231,9 +231,9 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
       return {
         q,
         meta,
-        subtitle: 'ملاحظات مشرفي الوزارة (للاطلاع)',
+        subtitle: 'ملاحظات المشرفين الميدانيين (للاطلاع)',
         pdfBody: table(
-          ['الملاحظة', 'الأهمية', 'الموقع', 'مشرف الوزارة', 'التاريخ والوقت', 'الصور'],
+          ['الملاحظة', 'الأهمية', 'الموقع', 'المشرف الميداني', 'التاريخ والوقت', 'الصور'],
           data.rows.map((n) => [
             n.text,
             chip(SEVERITY_LABEL[n.severity], n.severity === 'high' ? 'error' : n.severity === 'mid' ? 'warning' : 'success'),
@@ -252,7 +252,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
               { header: 'دورة المياه', width: 18 },
               { header: 'الدور', width: 14 },
               { header: 'المبنى', width: 16 },
-              { header: 'مشرف الوزارة', width: 18 },
+              { header: 'المشرف الميداني', width: 18 },
               { header: 'التاريخ', width: 18 },
               { header: 'الوقت', width: 8 },
               { header: 'عدد الصور', width: 10 },

@@ -33,7 +33,7 @@
   --color-err-ink: #b5512f;
   --color-err-bg: #fcede7;
 
-  /* ألوان فئة المستخدم: مراقب المقاول = أزرق، مشرف الوزارة = أحمر */
+  /* ألوان فئة المستخدم: مراقب المقاول = أزرق، المشرف الميداني = أحمر */
   --color-monitor-ink: #1f5f99;
   --color-monitor-bg: #e4eef8;
   --color-monitor-bar: #2f6fb0;

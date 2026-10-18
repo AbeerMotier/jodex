@@ -146,7 +146,7 @@ async function main() {
       full_name: m.full_name,
       role: 'contractor_monitor',
       monitor_kind: 'primary',
-      restroom_id: restroomId.get(m.restroom)!,
+      restroom_ids: [restroomId.get(m.restroom)!],
       substitute_for_id: null,
     });
   }
@@ -156,15 +156,14 @@ async function main() {
       full_name: s.full_name,
       role: 'contractor_monitor',
       monitor_kind: 'substitute',
-      restroom_id: null,
       substitute_for_id: userIds.get(s.substitute_for)!,
     });
   }
   for (const s of SUPERVISORS) {
-    await ensure({ username: s.username, full_name: s.full_name, role: 'supervisor', monitor_kind: null, restroom_id: null, substitute_for_id: null });
+    await ensure({ username: s.username, full_name: s.full_name, role: 'supervisor', monitor_kind: null, substitute_for_id: null });
   }
   for (const a of ADMINS) {
-    await ensure({ username: a.username, full_name: a.full_name, role: 'admin', monitor_kind: null, restroom_id: null, substitute_for_id: null });
+    await ensure({ username: a.username, full_name: a.full_name, role: 'admin', monitor_kind: null, substitute_for_id: null });
   }
 
   // 6) إسناد المواقع للمشرفين

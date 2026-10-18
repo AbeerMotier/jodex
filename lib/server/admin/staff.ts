@@ -6,8 +6,8 @@ import { audit } from '../audit';
 import { ApiError } from '../http';
 import { syncRounds } from '../rounds-maintenance';
 import { createServiceClient, createUserClient } from '../supabase';
-import { loadPeriodEvaluations, loadPeriodRounds, loadPrimaryMonitors, loadRestroomRefs, restroomScope, type CommonQuery } from './common';
-import { roomView } from './presenters';
+import { loadPeriodEvaluations, loadPeriodRounds, loadPrimaryMonitors, loadRestroomRefs, restroomScope, inScope, type CommonQuery } from './common';
+import { areaView } from './presenters';
 
 export interface StaffQuery extends CommonQuery {
   monitorId?: string;
@@ -28,7 +28,7 @@ async function performance(q: CommonQuery) {
     loadPeriodEvaluations(client, q.range),
   ]);
   const all = monitorPerformance(monitors, rounds, evaluations, 'all');
-  return { rooms, scope, all, perf: scope ? all.filter((p) => scope.has(p.restroomId)) : all };
+  return { rooms, scope, all, perf: all.filter((p) => inScope(scope, p.restroomIds)) };
 }
 
 async function activeApprovals(period: Period, from: string, to: string) {
@@ -55,14 +55,14 @@ export async function staffReport(q: StaffQuery, now: Date) {
   // الترتيب على مستوى الجهة (rank ثابت)، ثم يُعرض ما يقع ضمن الفلاتر
   const candidates = bonusCandidates(all)
     .map((p, i) => ({ p, rank: i + 1 }))
-    .filter(({ p }) => (!scope || scope.has(p.restroomId)) && filterRow(p.monitorId))
+    .filter(({ p }) => inScope(scope, p.restroomIds) && filterRow(p.monitorId))
     .map(({ p, rank }) => ({
       monitorId: p.monitorId,
       name: p.name,
       rank,
       cp: p.cp,
       q: p.q,
-      restroom: roomView(roomMap, p.restroomId),
+      restroom: areaView(roomMap, p.restroomIds),
       approved: approvals.has(p.monitorId),
       approvedAt: approvals.get(p.monitorId) ?? null,
     }));
@@ -72,7 +72,7 @@ export async function staffReport(q: StaffQuery, now: Date) {
       rank: i + 1,
       monitorId: p.monitorId,
       name: p.name,
-      restroom: roomView(roomMap, p.restroomId),
+      restroom: areaView(roomMap, p.restroomIds),
       completed: p.completed,
       required: p.required,
       cp: p.cp,

@@ -8,7 +8,7 @@ export type ItemGroup = 'contractor' | 'deep' | 'supervisor';
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin: 'الأدمن',
-  supervisor: 'مشرف الوزارة',
+  supervisor: 'المشرف الميداني',
   contractor_monitor: 'مراقب المقاول',
 };
 
@@ -117,7 +117,7 @@ export const ITEM_GROUP_EVALUATION: Record<ItemGroup, 'contractor_round' | 'supe
 };
 export const EVALUATION_TYPE_LABEL = {
   contractor_round: 'جولة مراقب المقاول',
-  supervisor_evaluation: 'تقييم مشرف الوزارة',
+  supervisor_evaluation: 'تقييم المشرف الميداني',
 } as const;
 /** نوع البند: محتسب في الدرجة (بوزن) أو قائمة تحقق مستقلة */
 export const ITEM_GROUP_SCORED: Record<ItemGroup, boolean> = { contractor: true, deep: false, supervisor: true };

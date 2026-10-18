@@ -24,29 +24,45 @@ import { syncRounds } from './rounds-maintenance';
 import { createServiceClient, createUserClient } from './supabase';
 
 export interface MonitorScope {
-  restroomId: string;
+  /** دورات المياه المسندة (للأساسي: دوراته، وللنائب: دورات الأساسي) */
+  restroomIds: string[];
   primaryId: string;
   primaryName: string;
   isSubstitute: boolean;
 }
 
-/** نطاق المراقب: الأساسي = دورته، النائب = دورة الأساسي الذي ينوب عنه */
+async function activeRestroomIdsOf(primaryId: string): Promise<string[]> {
+  const { data, error } = await createServiceClient()
+    .from('restrooms')
+    .select('id')
+    .eq('monitor_id', primaryId)
+    .eq('is_active', true);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.id as string);
+}
+
+const NO_ASSIGNMENT = 'لا توجد دورات مياه مسندة لك حاليًا. راجع الأدمن.';
+
+/** نطاق المراقب: الأساسي = دوراته، النائب = دورات الأساسي الذي ينوب عنه */
 export async function resolveMonitorScope(user: SessionUser): Promise<MonitorScope> {
   if (user.role !== 'contractor_monitor') throw new ApiError(403, 'forbidden', 'لا تملك صلاحية الوصول لهذه الصفحة');
-  if (user.monitorKind === 'primary' && user.restroomId) {
-    return { restroomId: user.restroomId, primaryId: user.id, primaryName: user.fullName, isSubstitute: false };
-  }
-  if (user.monitorKind === 'substitute' && user.substituteForId) {
+  let scope: Omit<MonitorScope, 'restroomIds'> | null = null;
+  if (user.monitorKind === 'primary') {
+    scope = { primaryId: user.id, primaryName: user.fullName, isSubstitute: false };
+  } else if (user.monitorKind === 'substitute' && user.substituteForId) {
     const { data: primary } = await createServiceClient()
       .from('users')
-      .select('id, full_name, restroom_id, is_active, monitor_kind')
+      .select('id, full_name, is_active, monitor_kind')
       .eq('id', user.substituteForId)
       .maybeSingle();
-    if (primary?.is_active && primary.monitor_kind === 'primary' && primary.restroom_id) {
-      return { restroomId: primary.restroom_id, primaryId: primary.id, primaryName: primary.full_name, isSubstitute: true };
+    if (primary?.is_active && primary.monitor_kind === 'primary') {
+      scope = { primaryId: primary.id, primaryName: primary.full_name, isSubstitute: true };
     }
   }
-  throw new ApiError(409, 'no_assignment', 'لا توجد دورة مياه مسندة لك حاليًا. راجع الأدمن.');
+  if (!scope) throw new ApiError(409, 'no_assignment', NO_ASSIGNMENT);
+  const restroomIds = await activeRestroomIdsOf(scope.primaryId);
+  if (!restroomIds.length) throw new ApiError(409, 'no_assignment', NO_ASSIGNMENT);
+  return { ...scope, restroomIds };
 }
 
 const ROUND_COLUMNS =
@@ -90,22 +106,65 @@ function liveComplianceBar(round: RoundRow, today: string, minute: number): numb
   return state === 'missed' ? 0 : 100;
 }
 
-export async function loadMonitorToday(user: SessionUser, now: Date) {
+interface MonitorRoom {
+  id: string;
+  code: string;
+  name: string;
+  floor_label: string;
+  building_id: string;
+}
+
+export async function loadMonitorToday(user: SessionUser, now: Date, requestedRestroomId?: string | null) {
   const scope = await resolveMonitorScope(user);
   await syncRounds(now);
   const today = riyadhDate(now);
   const minute = riyadhMinuteOfDay(now);
   const client = await createUserClient();
 
-  const [{ data: rounds, error: rErr }, { data: room }, items, settings] = await Promise.all([
-    client.from('rounds').select(ROUND_COLUMNS).eq('restroom_id', scope.restroomId).eq('round_date', today).order('shift'),
-    client.from('restrooms').select('id, code, name, floor_label, building_id').eq('id', scope.restroomId).maybeSingle(),
+  const [{ data: allRounds, error: rErr }, { data: roomRows, error: roomErr }, items, settings] = await Promise.all([
+    client.from('rounds').select(ROUND_COLUMNS).in('restroom_id', scope.restroomIds).eq('round_date', today).order('shift'),
+    client.from('restrooms').select('id, code, name, floor_label, building_id').in('id', scope.restroomIds),
     loadActiveItemsByGroup(),
     loadSettings(),
   ]);
   if (rErr) throw new Error(rErr.message);
-  if (!room) throw new ApiError(409, 'no_assignment', 'لا توجد دورة مياه مسندة لك حاليًا. راجع الأدمن.');
-  const { data: building } = await client.from('buildings').select('name').eq('id', room.building_id).maybeSingle();
+  if (roomErr) throw new Error(roomErr.message);
+  const rooms = (roomRows ?? []) as MonitorRoom[];
+  if (!rooms.length) throw new ApiError(409, 'no_assignment', NO_ASSIGNMENT);
+  const { data: buildingRows } = await client
+    .from('buildings')
+    .select('id, name')
+    .in('id', [...new Set(rooms.map((r) => r.building_id))]);
+  const buildingName = new Map((buildingRows ?? []).map((b) => [b.id as string, b.name as string]));
+  rooms.sort(
+    (x, y) =>
+      (buildingName.get(x.building_id) ?? '').localeCompare(buildingName.get(y.building_id) ?? '', 'ar') ||
+      x.code.localeCompare(y.code),
+  );
+
+  const roundsAll = (allRounds ?? []) as RoundRow[];
+  const roomSummaries = rooms.map((room) => {
+    const mine = roundsAll.filter((r) => r.restroom_id === room.id);
+    const state = worstBadge(mine.map((r) => roundBadgeState(r, today, minute)));
+    return {
+      id: room.id,
+      code: room.code,
+      name: room.name,
+      floor: room.floor_label,
+      building: buildingName.get(room.building_id) ?? '',
+      badge: { state, ...BADGE_STATUS[state] },
+      submitted: mine.filter((r) => r.status === 'submitted').length,
+      total: mine.length,
+    };
+  });
+  // الدورة المختارة: المطلوبة إن كانت ضمن النطاق، وإلا أول دورة لم تكتمل جولاتها
+  const selected =
+    rooms.find((r) => r.id === requestedRestroomId) ??
+    rooms.find((r) => roomSummaries.find((x) => x.id === r.id)!.submitted < roomSummaries.find((x) => x.id === r.id)!.total) ??
+    rooms[0];
+  const room = selected;
+  const building = { name: buildingName.get(room.building_id) ?? '' };
+  const rounds = roundsAll.filter((r) => r.restroom_id === room.id);
 
   const list = (rounds ?? []) as RoundRow[];
   const pendingIds = list.filter((r) => r.status === 'pending').map((r) => r.id);
@@ -155,7 +214,8 @@ export async function loadMonitorToday(user: SessionUser, now: Date) {
     minute,
     user: { id: user.id, name: user.fullName, isSubstitute: scope.isSubstitute },
     onBehalfOf: scope.isSubstitute ? scope.primaryName : null,
-    restroom: { name: room.name, code: room.code, floor: room.floor_label, building: building?.name ?? '' },
+    restroom: { id: room.id, name: room.name, code: room.code, floor: room.floor_label, building: building.name },
+    restrooms: roomSummaries,
     badge: { state: badge, ...BADGE_STATUS[badge] },
     defaultShift: defaultShift(minute, list),
     deep: {
@@ -178,7 +238,7 @@ async function openRoundForMonitor(user: SessionUser, roundId: string, now: Date
   await syncRounds(now);
   const { data: round } = await createServiceClient().from('rounds').select(ROUND_COLUMNS).eq('id', roundId).maybeSingle();
   // لا نكشف وجود جولات مواقع أخرى
-  if (!round || round.restroom_id !== scope.restroomId) throw new ApiError(404, 'round_not_found', 'الجولة غير موجودة.');
+  if (!round || !scope.restroomIds.includes(round.restroom_id)) throw new ApiError(404, 'round_not_found', 'الجولة غير موجودة.');
   const r = round as RoundRow;
   if (r.round_date !== riyadhDate(now)) throw new ApiError(409, 'not_today', 'لا يمكن العمل على جولة يوم آخر.');
   return { scope, round: r };

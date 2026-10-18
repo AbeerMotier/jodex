@@ -142,7 +142,7 @@ export function DashboardView() {
             <div className="mt-1 text-[12.5px] text-muted">النتائج الموزونة من 100 · {data.periodLabel}</div>
             <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
               {data.quality.contractor && <QualityTile testId="tile-contractor" bg="#E6F2EA" label="متوسط نتيجة جولات مراقبي المقاول" value={data.quality.contractor.value} sub={data.quality.contractor.sub} />}
-              {data.quality.supervisor && <QualityTile testId="tile-supervisor" bg="#FBF4E1" label="متوسط التقييم العام لمشرفي الوزارة" value={data.quality.supervisor.value} sub={data.quality.supervisor.sub} />}
+              {data.quality.supervisor && <QualityTile testId="tile-supervisor" bg="#FBF4E1" label="متوسط التقييم العام للمشرفين الميدانيين" value={data.quality.supervisor.value} sub={data.quality.supervisor.sub} />}
               {data.quality.beneficiary && <QualityTile testId="tile-beneficiary" bg="#E6F2EA" label="رضا المستفيدين" value={data.quality.beneficiary.value} sub={data.quality.beneficiary.sub} />}
               {data.quality.compliance && (
                 <QualityTile

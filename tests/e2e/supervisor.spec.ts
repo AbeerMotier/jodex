@@ -1,5 +1,5 @@
 /**
- * تقييمات مشرف الوزارة: التحقق الرقابي، الملاحظة الإلزامية وأهميتها، عدم تطبيق قواعد الالتزام،
+ * تقييمات المشرف الميداني: التحقق الرقابي، الملاحظة الإلزامية وأهميتها، عدم تطبيق قواعد الالتزام،
  * وواجهة المشرف وألوان الفئة في صفحتي الملاحظات والسجل.
  */
 import { randomUUID } from 'node:crypto';
@@ -143,7 +143,7 @@ test('ألوان الفئة: شارة المشرف حمراء في الملاح�
     await expect(page.getByTestId('note-card').first()).toBeVisible();
     const noteChips = await computedColors(page, '[data-testid="note-card"] [data-role-chip]');
     expect(noteChips.length).toBeGreaterThan(0);
-    for (const c of noteChips) expect(c).toMatchObject({ color: rgb('#A12B2B'), background: rgb('#F8E4E4'), text: 'مشرف الوزارة' });
+    for (const c of noteChips) expect(c).toMatchObject({ color: rgb('#A12B2B'), background: rgb('#F8E4E4'), text: 'المشرف الميداني' });
 
     await page.goto(`/admin/rounds?period=today&building=${w.building.id}`);
     await expect(page.getByTestId('log-row').first()).toBeVisible();
@@ -151,7 +151,7 @@ test('ألوان الفئة: شارة المشرف حمراء في الملاح�
     const mon = await computedColors(page, '[data-testid="log-row"] [data-role-chip="contractor_monitor"]');
     expect(sup.length).toBeGreaterThan(0);
     expect(mon.length).toBeGreaterThan(0);
-    for (const c of sup) expect(c).toMatchObject({ color: rgb('#A12B2B'), background: rgb('#F8E4E4'), text: 'مشرف الوزارة' });
+    for (const c of sup) expect(c).toMatchObject({ color: rgb('#A12B2B'), background: rgb('#F8E4E4'), text: 'المشرف الميداني' });
     for (const c of mon) expect(c).toMatchObject({ color: rgb('#1F5F99'), background: rgb('#E4EEF8'), text: 'مراقب المقاول' });
     expect(s.errors).toEqual([]);
   } finally {

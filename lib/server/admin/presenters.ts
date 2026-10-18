@@ -24,6 +24,21 @@ export function roomView(rooms: Map<string, RestroomRef>, id: string) {
   return { id, name: r?.name ?? '—', floor: r?.floor_label ?? '—', building: r?.building_name ?? '—' };
 }
 
+/** وصف مواقع المراقب: دورة واحدة كما هي، أو ملخص «N دورات مياه» مع المباني والأدوار */
+export function areaView(rooms: Map<string, RestroomRef>, ids: string[]) {
+  if (ids.length === 1) return roomView(rooms, ids[0]);
+  const list = ids.map((id) => rooms.get(id)).filter((r): r is RestroomRef => Boolean(r));
+  if (!list.length) return { id: '', name: '—', floor: '—', building: '—' };
+  const floors = new Set(list.map((r) => r.floor_label));
+  const buildings = [...new Set(list.map((r) => r.building_name))];
+  return {
+    id: list[0].id,
+    name: `${list.length} دورات مياه`,
+    floor: floors.size === 1 ? [...floors][0] : `${floors.size} أدوار`,
+    building: buildings.join('، '),
+  };
+}
+
 export function roundEntry(
   r: MetricRound,
   rooms: Map<string, RestroomRef>,

@@ -101,7 +101,7 @@ export function roundSubmissionIssues(input: {
 export const photoSlotSchema = z.enum(PHOTO_SLOTS.map((s) => s.slot) as [PhotoSlot, ...PhotoSlot[]]);
 
 // ---------------------------------------------------------------------
-// تقييم مشرف الوزارة
+// تقييم المشرف الميداني
 // ---------------------------------------------------------------------
 export const evaluationStartSchema = z.object({ restroomId: z.guid('اختر الموقع.') });
 

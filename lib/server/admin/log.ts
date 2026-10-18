@@ -232,14 +232,14 @@ export async function logDetails(kind: string, id: string, now: Date) {
     const room = roomView(roomMap, e.restroom_id);
     return {
       kind: 'supervisor' as const,
-      kicker: 'مشرف الوزارة · تقييم عام مستقل للموقع',
+      kicker: 'المشرف الميداني · تقييم عام مستقل للموقع',
       title: `تقييم الموقع — ${room.name}`,
       score: Number(e.score),
       status: { label: 'مكتملة', tone: 'success' as const },
       meta: [
         { k: 'التاريخ', v: instantDate(e.submitted_at), type: 'date' },
         { k: 'الوقت', v: e.submitted_at, type: 'time' },
-        { k: 'مشرف الوزارة', v: names[e.supervisor_id] ?? '—', type: 'text' },
+        { k: 'المشرف الميداني', v: names[e.supervisor_id] ?? '—', type: 'text' },
         { k: 'الموقع', v: `${room.name} · ${room.floor} · ${room.building}`, type: 'text' },
         { k: 'جولة المراقب مطابقة للواقع', v: e.matches_round === 'yes' ? 'نعم' : e.matches_round === 'no' ? 'لا' : '—', type: 'text' },
         { k: 'يحتاج معالجة فورية', v: e.needs_urgent === 'yes' ? 'نعم' : 'لا', type: 'text' },

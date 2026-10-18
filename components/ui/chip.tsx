@@ -9,7 +9,7 @@ export const TONE_COLORS: Record<Tone | 'monitor' | 'supervisor' | 'brand', { bg
   error: { bg: '#FCEDE7', c: '#B5512F' },
   neutral: { bg: '#EAF3EC', c: '#44665A' },
   brand: { bg: '#E6F2EA', c: '#3F7A62' },
-  // ألوان فئة المستخدم: مراقب المقاول أزرق، مشرف الوزارة أحمر
+  // ألوان فئة المستخدم: مراقب المقاول أزرق، المشرف الميداني أحمر
   monitor: { bg: '#E4EEF8', c: '#1F5F99' },
   supervisor: { bg: '#F8E4E4', c: '#A12B2B' },
 };

@@ -142,15 +142,26 @@ export async function loadFeedbackSummary(client: SupabaseClient, range: DateRan
 }
 
 export async function loadPrimaryMonitors(client: SupabaseClient): Promise<MonitorRef[]> {
-  const { data, error } = await client
-    .from('users')
-    .select('id, full_name, restroom_id')
-    .eq('role', 'contractor_monitor')
-    .eq('monitor_kind', 'primary')
-    .eq('is_active', true)
-    .order('full_name');
+  const [{ data, error }, { data: rooms, error: roomErr }] = await Promise.all([
+    client
+      .from('users')
+      .select('id, full_name')
+      .eq('role', 'contractor_monitor')
+      .eq('monitor_kind', 'primary')
+      .eq('is_active', true)
+      .order('full_name'),
+    client.from('restrooms').select('id, monitor_id').not('monitor_id', 'is', null),
+  ]);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((u) => ({ id: u.id, full_name: u.full_name, restroom_id: u.restroom_id }));
+  if (roomErr) throw new Error(roomErr.message);
+  const byMonitor = new Map<string, string[]>();
+  for (const r of rooms ?? []) byMonitor.set(r.monitor_id, [...(byMonitor.get(r.monitor_id) ?? []), r.id]);
+  return (data ?? []).map((u) => ({ id: u.id, full_name: u.full_name, restroom_ids: byMonitor.get(u.id) ?? [] }));
+}
+
+/** هل يقع أي من مواقع المراقب ضمن نطاق الفلاتر */
+export function inScope(scope: Set<string> | undefined, restroomIds: string[]): boolean {
+  return !scope || restroomIds.some((id) => scope.has(id));
 }
 
 export const PERIOD_TEXT: Record<Period, string> = { today: 'اليوم', week: 'آخر 7 أيام', month: 'آخر 30 يومًا' };

@@ -36,13 +36,25 @@ interface RoundView {
   draft: { answers: Record<string, Answer>; note: string; updatedAt: string } | null;
 }
 
+interface RoomSummary {
+  id: string;
+  code: string;
+  name: string;
+  floor: string;
+  building: string;
+  badge: { state: string; label: string; tone: Tone };
+  submitted: number;
+  total: number;
+}
+
 interface TodayData {
   serverNow: string;
   today: string;
   minute: number;
   user: { id: string; name: string; isSubstitute: boolean };
   onBehalfOf: string | null;
-  restroom: { name: string; code: string; floor: string; building: string };
+  restroom: { id: string; name: string; code: string; floor: string; building: string };
+  restrooms: RoomSummary[];
   badge: { state: string; label: string; tone: Tone };
   defaultShift: Shift;
   deep: { required: boolean; weekday: number };
@@ -82,7 +94,11 @@ const OPTIONS: Answer[] = ['done', 'partial', 'not_done'];
 
 export function MonitorApp({ userId }: { userId: string }) {
   const toast = useToast();
-  const { data, error, loading, reload } = useApi<TodayData>('/api/monitor/today');
+  // دورة المياه المختارة (المراقب قد يكون مسؤولًا عن مبنى كامل)
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const { data, error, loading, reload } = useApi<TodayData>(
+    roomId ? `/api/monitor/today?restroom=${encodeURIComponent(roomId)}` : '/api/monitor/today',
+  );
   const now = useServerClock(data?.serverNow, 15_000);
   const [chosenShift, setShift] = useState<Shift | null>(null);
   const [forms, setForms] = useState<Record<string, FormState>>({});
@@ -95,8 +111,12 @@ export function MonitorApp({ userId }: { userId: string }) {
   const idemKeys = useRef<Record<string, string>>({});
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  // الجولة المعروضة افتراضيًا: تُثبَّت عند أول تحميل (ولا تقفز أثناء التعبئة عند التحديث الدوري)
-  if (data && chosenShift === null) setShift(data.defaultShift);
+  // الجولة المعروضة افتراضيًا: تُثبَّت عند أول تحميل لكل دورة مياه (ولا تقفز أثناء التعبئة عند التحديث الدوري)
+  const [shiftRoom, setShiftRoom] = useState<string | null>(null);
+  if (data && data.restroom.id !== shiftRoom) {
+    setShiftRoom(data.restroom.id);
+    setShift(data.defaultShift);
+  }
   const shift = chosenShift ?? data?.defaultShift ?? null;
 
   // تهيئة النماذج من المسودة (الخادم أو النسخة المحلية الأحدث) عند وصول بيانات جديدة
@@ -313,6 +333,7 @@ export function MonitorApp({ userId }: { userId: string }) {
             <InfoTile label="المبنى" value={data.restroom.building} />
             <InfoTile label="الدور" value={data.restroom.floor} />
             <InfoTile label="دورة المياه" value={data.restroom.name} />
+            <InfoTile label="الترميز" value={<span dir="ltr" className="tabular">{data.restroom.code}</span>} />
             <InfoTile label="التاريخ" value={dayLabel(data.today)} />
             <InfoTile label="الوقت" value={<span className="tabular">{timeHM(now)}</span>} />
           </div>
@@ -323,6 +344,10 @@ export function MonitorApp({ userId }: { userId: string }) {
           )}
         </div>
       </GreenHero>
+
+      {data.restrooms.length > 1 && (
+        <RoomPicker rooms={data.restrooms} selectedId={data.restroom.id} busy={loading} onSelect={setRoomId} />
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         {data.rounds.map((r) => {
@@ -626,5 +651,67 @@ function MonitorSkeleton() {
       <SkeletonCard lines={5} />
       <SkeletonCard lines={3} />
     </main>
+  );
+}
+
+/** قائمة دورات المياه المسندة للمراقب مع حالة جولات اليوم لكل منها */
+function RoomPicker({
+  rooms,
+  selectedId,
+  busy,
+  onSelect,
+}: {
+  rooms: RoomSummary[];
+  selectedId: string;
+  busy: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const done = rooms.filter((r) => r.total > 0 && r.submitted === r.total).length;
+  return (
+    <Card className="flex flex-col gap-3 p-4" data-testid="room-picker">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[15px] font-bold text-ink">دورات المياه المسندة ({rooms.length})</h2>
+        <span className="flex items-center gap-2 text-[12.5px] text-muted">
+          {busy && <Spinner size={14} />}
+          <span className="tabular">
+            مكتملة اليوم: {done} / {rooms.length}
+          </span>
+        </span>
+      </div>
+      <div className="grid max-h-[320px] grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2 overflow-y-auto">
+        {rooms.map((r) => {
+          const on = r.id === selectedId;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => onSelect(r.id)}
+              aria-pressed={on}
+              data-testid={`room-${r.code}`}
+              className="flex cursor-pointer flex-col gap-1.5 rounded-[12px] border border-line bg-white px-3 py-2.5 text-right"
+              style={{ boxShadow: on ? '0 0 0 2px #2F4F44' : 'none' }}
+            >
+              <span className="flex w-full items-center justify-between gap-2">
+                <span className="text-[13.5px] font-semibold text-ink">{r.name}</span>
+                <span className="tabular text-[12px] text-muted">
+                  {r.submitted}/{r.total}
+                </span>
+              </span>
+              <span className="text-[12px] text-muted">
+                {r.floor} · {r.building}
+              </span>
+              <span className="flex items-center justify-between gap-2">
+                <span dir="ltr" className="tabular text-[11px] text-muted">
+                  {r.code}
+                </span>
+                <Chip tone={r.badge.tone === 'neutral' ? 'neutral' : r.badge.tone} size="xs" dot>
+                  {r.badge.label}
+                </Chip>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </Card>
   );
 }

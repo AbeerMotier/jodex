@@ -3,7 +3,7 @@ import { fmtPct } from '@/lib/domain/format';
 
 export const SERIES_STYLE = {
   contractor: { label: 'مراقب المقاول', color: '#2F6FB0' },
-  supervisor: { label: 'مشرف الوزارة', color: '#C24545' },
+  supervisor: { label: 'المشرف الميداني', color: '#C24545' },
   beneficiary: { label: 'رضا المستفيدين', color: '#55957A' },
 } as const;
 export type SeriesKey = keyof typeof SERIES_STYLE;

@@ -26,7 +26,7 @@ interface Row {
 const PERIODS: Period[] = ['today', 'week', 'month'];
 const SEVERITY_TONE = { high: 'error', mid: 'warning', low: 'success' } as const;
 
-/** ملاحظات مشرفي الوزارة — للاطلاع فقط (سير عمل الإجراءات التصحيحية غير معرّف بعد) */
+/** ملاحظات المشرفين الميدانيين — للاطلاع فقط (سير عمل الإجراءات التصحيحية غير معرّف بعد) */
 export function NotesView() {
   const f = useUrlFilters();
   const options = useFilterOptions();
@@ -49,7 +49,7 @@ export function NotesView() {
       </FilterGroup>
       <LocationFilters building={f.get('building')} floor={f.get('floor')} restroom={f.get('restroom')} onChange={(p) => f.set(p)} />
       <SelectField
-        label="مشرف الوزارة"
+        label="المشرف الميداني"
         testId="filter-supervisor"
         value={f.get('supervisor')}
         onChange={(v) => f.set({ supervisor: v })}
@@ -71,7 +71,7 @@ export function NotesView() {
     <>
       <PageHeader
         title="الملاحظات والإجراءات"
-        sub={`${PERIOD_LABEL[f.period]} · ملاحظات مشرفي الوزارة للاطلاع`}
+        sub={`${PERIOD_LABEL[f.period]} · ملاحظات المشرفين الميدانيين للاطلاع`}
         actions={<Toolbar filters={filters} activeCount={active.length} exportUrl={(format) => `/api/admin/export?report=notes&format=${format}&${apiQuery}`} exportName="jodex-notes" />}
       />
       <ActiveFilters items={active} onClear={() => f.set({ building: null, floor: null, restroom: null, supervisor: null, severity: null })} />
@@ -86,7 +86,7 @@ export function NotesView() {
           </div>
         )}
         {!loading && !error && rows.length === 0 && (
-          <div className="rounded-[18px] border border-line bg-white p-6 text-center text-[13.5px] text-muted">لا توجد ملاحظات من مشرفي الوزارة في هذه الفترة.</div>
+          <div className="rounded-[18px] border border-line bg-white p-6 text-center text-[13.5px] text-muted">لا توجد ملاحظات من المشرفين الميدانيين في هذه الفترة.</div>
         )}
         {!loading &&
           rows.map((n) => (

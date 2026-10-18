@@ -9,7 +9,6 @@ export interface SessionUser {
   fullName: string;
   role: Role;
   monitorKind: MonitorKind | null;
-  restroomId: string | null;
   substituteForId: string | null;
 }
 
@@ -23,7 +22,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   if (error || !user) return null;
   const { data: profile } = await createServiceClient()
     .from('users')
-    .select('id, username, full_name, role, monitor_kind, restroom_id, substitute_for_id, is_active')
+    .select('id, username, full_name, role, monitor_kind, substitute_for_id, is_active')
     .eq('id', user.id)
     .maybeSingle();
   if (!profile || !profile.is_active) return null;
@@ -33,7 +32,6 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     fullName: profile.full_name,
     role: profile.role,
     monitorKind: profile.monitor_kind,
-    restroomId: profile.restroom_id,
     substituteForId: profile.substitute_for_id,
   };
 });

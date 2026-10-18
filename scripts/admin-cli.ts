@@ -42,8 +42,8 @@ const HELP = `
 المستخدمون:
   users:list
   users:add --username <u> --name "<الاسم>" --role admin|supervisor|monitor [--kind primary|substitute]
-            [--restroom <CODE>] [--substitute-for <username>]
-  users:update --username <u> [--name "<الاسم>"] [--restroom <CODE>] [--substitute-for <username>]
+            [--restroom <CODE>[,<CODE>…]] [--substitute-for <username>]
+  users:update --username <u> [--name "<الاسم>"] [--restroom <CODE>[,<CODE>…]] [--substitute-for <username>]
   users:deactivate --username <u>        (يمنع الدخول ويُنهي الجلسات)
   users:activate --username <u>
   users:reset-password --username <u>    (كلمة مرور عشوائية تُطبع مرة واحدة)
@@ -82,10 +82,17 @@ async function main() {
     }
     return data;
   };
+  /** --restroom A0M أو عدة رموز مفصولة بفاصلة: A0M,A0F */
+  const restroomIdsByCodes = async (value: unknown) => {
+    if (typeof value !== 'string' || !value.trim()) return [];
+    const ids: string[] = [];
+    for (const code of value.split(',').map((c) => c.trim()).filter(Boolean)) ids.push((await restroomByCode(code)).id);
+    return ids;
+  };
   const userByUsername = async (username: string) => {
     const { data } = await svc
       .from('users')
-      .select('id, username, full_name, role, monitor_kind, restroom_id, substitute_for_id, is_active')
+      .select('id, username, full_name, role, monitor_kind, substitute_for_id, is_active')
       .eq('username', username.toLowerCase())
       .maybeSingle();
     if (!data) {
@@ -106,10 +113,11 @@ async function main() {
   switch (command) {
     case 'users:list': {
       const [{ data: users }, { data: rooms }] = await Promise.all([
-        svc.from('users').select('id, username, full_name, role, monitor_kind, is_active, restroom_id, substitute_for_id').order('role').order('username'),
-        svc.from('restrooms').select('id, code'),
+        svc.from('users').select('id, username, full_name, role, monitor_kind, is_active, substitute_for_id').order('role').order('username'),
+        svc.from('restrooms').select('code, monitor_id').order('code'),
       ]);
-      const code = new Map((rooms ?? []).map((r) => [r.id, r.code]));
+      const codesOf = new Map<string, string[]>();
+      for (const r of rooms ?? []) if (r.monitor_id) codesOf.set(r.monitor_id, [...(codesOf.get(r.monitor_id) ?? []), r.code]);
       const uname = new Map((users ?? []).map((u) => [u.id, u.username]));
       console.table(
         (users ?? []).map((u) => ({
@@ -117,7 +125,7 @@ async function main() {
           name: u.full_name,
           role: u.role,
           kind: u.monitor_kind ?? '',
-          restroom: u.restroom_id ? code.get(u.restroom_id) : '',
+          restrooms: (codesOf.get(u.id) ?? []).join(' '),
           substitute_for: u.substitute_for_id ? uname.get(u.substitute_for_id) : '',
           active: u.is_active,
         })),
@@ -134,11 +142,11 @@ async function main() {
         process.exit(1);
       }
       let monitor_kind: 'primary' | 'substitute' | null = null;
-      let restroom_id: string | null = null;
+      let restroom_ids: string[] = [];
       let substitute_for_id: string | null = null;
       if (role === 'contractor_monitor') {
         monitor_kind = (args.kind === 'substitute' ? 'substitute' : 'primary') as 'primary' | 'substitute';
-        if (monitor_kind === 'primary') restroom_id = (await restroomByCode(need(args, 'restroom'))).id;
+        if (monitor_kind === 'primary') restroom_ids = await restroomIdsByCodes(args.restroom);
         else substitute_for_id = (await userByUsername(need(args, 'substitute-for'))).id;
       }
       const res = await upsertAccount(svc, {
@@ -146,7 +154,7 @@ async function main() {
         full_name: name,
         role: role as 'admin' | 'supervisor' | 'contractor_monitor',
         monitor_kind,
-        restroom_id,
+        restroom_ids,
         substitute_for_id,
       });
       await audit('users.add', 'users', res.id, { username, role });
@@ -158,10 +166,21 @@ async function main() {
       const user = await userByUsername(need(args, 'username'));
       const patch: Record<string, unknown> = {};
       if (typeof args.name === 'string') patch.full_name = args.name;
-      if (typeof args.restroom === 'string') patch.restroom_id = (await restroomByCode(args.restroom)).id;
       if (typeof args['substitute-for'] === 'string') patch.substitute_for_id = (await userByUsername(args['substitute-for'])).id;
-      const { error } = await svc.from('users').update(patch).eq('id', user.id);
-      if (error) throw error;
+      if (Object.keys(patch).length) {
+        const { error } = await svc.from('users').update(patch).eq('id', user.id);
+        if (error) throw error;
+      }
+      if (typeof args.restroom === 'string') {
+        if (user.monitor_kind !== 'primary') {
+          console.error('✗ إسناد دورات المياه للمراقب الأساسي فقط');
+          process.exit(1);
+        }
+        const ids = await restroomIdsByCodes(args.restroom);
+        const { error } = await svc.from('restrooms').update({ monitor_id: user.id }).in('id', ids);
+        if (error) throw error;
+        patch.restrooms = args.restroom;
+      }
       await audit('users.update', 'users', user.id, patch);
       console.log(`✓ حُدّث ${user.username}`);
       return;

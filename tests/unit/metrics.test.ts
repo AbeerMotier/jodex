@@ -106,10 +106,11 @@ describe('رضا المستفيدين والمشرفين', () => {
 
 describe('أداء المراقبين والمكافآت', () => {
   const monitors = [
-    { id: 'm1', full_name: 'خالد', restroom_id: 'A' },
-    { id: 'm2', full_name: 'نورة', restroom_id: 'B' },
-    { id: 'm3', full_name: 'فهد', restroom_id: 'C' },
-    { id: 'm4', full_name: 'سعيد', restroom_id: 'D' },
+    // m1 مسؤول عن دورتين (A و E): تقييم المشرف = متوسط تقييمات الدورتين
+    { id: 'm1', full_name: 'خالد', restroom_ids: ['A', 'E'] },
+    { id: 'm2', full_name: 'نورة', restroom_ids: ['B'] },
+    { id: 'm3', full_name: 'فهد', restroom_ids: ['C'] },
+    { id: 'm4', full_name: 'سعيد', restroom_ids: ['D'] },
   ];
   const rounds = [
     submitted({ assigned_monitor_id: 'm1', restroom_id: 'A', quality_score: 96, compliance_score: 100 }),
@@ -122,12 +123,13 @@ describe('أداء المراقبين والمكافآت', () => {
   const evals: MetricEvaluation[] = [
     { id: 'e1', restroom_id: 'A', supervisor_id: 's', submitted_at: '2026-10-15T07:00:00Z', score: 90 },
     { id: 'e2', restroom_id: 'C', supervisor_id: 's', submitted_at: '2026-10-15T07:00:00Z', score: 80 },
+    { id: 'e3', restroom_id: 'E', supervisor_id: 's', submitted_at: '2026-10-15T08:00:00Z', score: 100 },
   ];
   const perf = monitorPerformance(monitors, rounds, evals);
 
   it('cp و a و s و q', () => {
     const m1 = perf.find((p) => p.monitorId === 'm1')!;
-    expect(m1).toMatchObject({ cp: 97.5, a: 95, s: 90, q: 92.5, completed: 2, required: 2, classification: 'excellent' });
+    expect(m1).toMatchObject({ cp: 97.5, a: 95, s: 95, q: 95, completed: 2, required: 2, classification: 'excellent' });
     const m2 = perf.find((p) => p.monitorId === 'm2')!;
     expect(m2).toMatchObject({ cp: 46, a: 88, s: null, q: 88, classification: 'needs_follow_up' });
     const m3 = perf.find((p) => p.monitorId === 'm3')!;

@@ -292,7 +292,7 @@ export function SupervisorApp({ userId }: { userId: string }) {
           <div className="flex items-center gap-3">
             <Avatar name={data.supervisor.name} className="border border-white/35 bg-white/[.16] text-white" />
             <div>
-              <div className="text-[12.5px] font-semibold text-white">مشرف الوزارة · تقييم الموقع</div>
+              <div className="text-[12.5px] font-semibold text-white">المشرف الميداني · تقييم الموقع</div>
               <div className="text-[21px] font-bold" data-testid="supervisor-name">
                 {data.supervisor.name}
               </div>
@@ -435,7 +435,7 @@ export function SupervisorApp({ userId }: { userId: string }) {
 
           <Card className="flex flex-col gap-3 p-[18px]">
             <label htmlFor="sup-note" className="text-[17px] font-bold">
-              ملاحظات مشرف الوزارة{' '}
+              ملاحظات المشرف الميداني{' '}
               <span className="text-[13px] font-normal text-muted">{lowItems.length ? '(مطلوبة لوجود تقييم منخفض)' : '(اختياري)'}</span>
             </label>
             <textarea
