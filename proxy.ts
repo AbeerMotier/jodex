@@ -16,6 +16,18 @@ const PROTECTED: { prefix: string; role: Role }[] = [
 ];
 const CSRF_COOKIE = 'jodex_csrf';
 
+const MISSING_ENV_PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>جُودِكس — الإعدادات ناقصة</title></head>
+<body style="margin:0;font-family:system-ui,'Segoe UI',Tahoma,sans-serif;background:#F2F6F3;color:#2F4F44;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px">
+<main style="max-width:620px;background:#fff;border:1px solid #E3EAE6;border-radius:20px;padding:28px;line-height:1.9">
+<h1 style="margin:0 0 8px;font-size:22px">إعدادات الاتصال بقاعدة البيانات ناقصة</h1>
+<p style="margin:0 0 14px">لم يجد النظام عنوان Supabase أو مفتاحه (<code dir="ltr">NEXT_PUBLIC_SUPABASE_URL</code> و <code dir="ltr">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>).</p>
+<p style="margin:0 0 6px"><b>على جهازك:</b> أوقف التشغيل في الطرفية بـ <code dir="ltr">Ctrl+C</code> ثم نفّذ:</p>
+<pre dir="ltr" style="background:#EAF3EC;border-radius:12px;padding:12px 14px;margin:0 0 6px;text-align:left">npm run setup:cloud
+npm run dev</pre>
+<p style="margin:0 0 14px;font-size:14px;color:#687D74">(أو <code dir="ltr">npm run setup:env</code> بدل الأول إن كنت تستخدم Supabase المحلي عبر Docker). تأكد أن الملف <code dir="ltr">.env.local</code> موجود بجانب <code dir="ltr">package.json</code>.</p>
+<p style="margin:0"><b>على السيرفر (Render):</b> أضف القيم في Environment ثم أعد النشر.</p>
+</main></body></html>`;
+
 /** قراءة متغيرات البيئة وقت التشغيل (لا تُضمَّن قيم وقت البناء في الحزمة) */
 function runtimeEnv(name: string): string | undefined {
   const value = process.env[name];
@@ -67,6 +79,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
+  // إعدادات Supabase ناقصة (ملف .env.local غير موجود أو فارغ): صفحة توضح الحل بدل خطأ غامض
+  const supabaseUrl = runtimeEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const supabaseKey = runtimeEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('[jodex] NEXT_PUBLIC_SUPABASE_URL أو NEXT_PUBLIC_SUPABASE_ANON_KEY غير مضبوط — نفّذ npm run setup:cloud أو npm run setup:env');
+    return new NextResponse(MISSING_ENV_PAGE, {
+      status: 503,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",
+      },
+    });
+  }
+
   const nonce = randomToken(16);
   const csp = buildCsp(nonce);
   const requestHeaders = new Headers(request.headers);
@@ -76,8 +103,8 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient(
-    runtimeEnv('NEXT_PUBLIC_SUPABASE_URL')!,
-    runtimeEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY')!,
+    supabaseUrl,
+    supabaseKey,
     {
       cookies: {
         getAll() {
