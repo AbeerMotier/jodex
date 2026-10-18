@@ -132,3 +132,19 @@ npm run db:seed
 | البناء على Render فشل | افتح **Logs** وانسخ آخر 30 سطرًا وأرسلها |
 | رسالة «محاولات كثيرة» عند دخول عدة موظفين معًا | الدخول يتم من السيرفر فيظهر لـ Supabase كجهاز واحد؛ ارفع الحد من Supabase ← Authentication ← **Rate Limits** (Sign-ins/Sign-ups) |
 | `running scripts is disabled on this system` في الطرفية | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` ثم `Y`، وافتح طرفية جديدة |
+
+---
+
+## طريقة بدون طرفية: SQL Editor + Netlify
+
+**قاعدة البيانات (Supabase ← SQL Editor ← New query):** الصق كل ملف كاملًا واضغط Run، بالترتيب:
+1. `supabase/00_ALL_IN_ONE.sql` — الجداول والصلاحيات والدوال (مرة واحدة؛ إن كانت موجودة يرفض بأمان).
+2. `supabase/manual-seed.sql` — المباني ودورات المياه وبنود التقييم والحسابات (يعرض كلمات المرور مرة واحدة).
+3. (اختياري) `supabase/three-accounts.sql` — ثلاثة حسابات فقط بأسماء وكلمات مرور تختارها.
+
+**Netlify ← Project configuration ← Environment variables:** عشرة متغيرات، كلها All scopes ونفس القيمة لكل السياقات:
+`NEXT_PUBLIC_SUPABASE_URL`، `NEXT_PUBLIC_SUPABASE_ANON_KEY` (بدون Secret — تُضمَّن وقت البناء)،
+`SUPABASE_SERVICE_ROLE_KEY`، `APP_SECRET`، `CRON_SECRET` (Secret)،
+`APP_BASE_URL` و `PUBLIC_APP_URL` (رابط الموقع)، `AUTH_EMAIL_DOMAIN=jodex.local`، `TRUSTED_PROXY_HOPS=1`، `DEMO_MODE=false`.
+بعد أي تعديل: Deploys ← Trigger deploy ← **Clear cache and deploy site**. لا تضف `TZ` (محجوز في Netlify).
+تقارير PDF وطباعة QR بصيغة PDF لا تعمل على Netlify (لا يوجد متصفح Chromium)؛ استخدم Render لها.
