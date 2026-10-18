@@ -200,3 +200,81 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------
+// إدارة المستخدمين والمباني ودورات المياه (الأدمن)
+// ---------------------------------------------------------------------
+export const USERNAME_PATTERN = /^[a-z0-9._-]{2,32}$/;
+export const RESTROOM_CODE_PATTERN = /^[A-Z0-9-]{2,40}$/;
+
+const fullNameField = z.string('أدخل الاسم.').trim().min(2, 'الاسم قصير جدًا.').max(120, 'الاسم طويل جدًا (120 حرفًا كحد أقصى).');
+const roleField = z.enum(['admin', 'supervisor', 'contractor_monitor'], 'اختر الدور.');
+const monitorKindField = z.enum(['primary', 'substitute'], 'اختر نوع المراقب.').nullable();
+const idField = (message: string) => z.guid(message);
+
+/** شكل المراقب: الأساسي بلا «ينوب عن»، والنائب ينوب عن مراقب أساسي، وغير المراقب بلا نوع */
+function refineMonitorShape(
+  v: { role?: string; monitorKind?: string | null; substituteForId?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (v.role === undefined) return;
+  if (v.role === 'contractor_monitor') {
+    if (!v.monitorKind) ctx.addIssue({ code: 'custom', path: ['monitorKind'], message: 'اختر نوع المراقب (أساسي أو نائب).' });
+    if (v.monitorKind === 'substitute' && !v.substituteForId) {
+      ctx.addIssue({ code: 'custom', path: ['substituteForId'], message: 'اختر المراقب الأساسي الذي ينوب عنه.' });
+    }
+  }
+}
+
+export const userCreateSchema = z
+  .object({
+    username: z
+      .string('أدخل اسم المستخدم.')
+      .trim()
+      .toLowerCase()
+      .regex(USERNAME_PATTERN, 'اسم المستخدم: من 2 إلى 32 حرفًا إنجليزيًا صغيرًا أو رقمًا أو . _ -'),
+    fullName: fullNameField,
+    role: roleField,
+    monitorKind: monitorKindField.default(null),
+    substituteForId: idField('اختر المراقب الأساسي.').nullable().default(null),
+  })
+  .superRefine(refineMonitorShape);
+export type UserCreateInput = z.infer<typeof userCreateSchema>;
+
+export const userUpdateSchema = z
+  .object({
+    fullName: fullNameField.optional(),
+    role: roleField.optional(),
+    monitorKind: monitorKindField.optional(),
+    substituteForId: idField('اختر المراقب الأساسي.').nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .superRefine(refineMonitorShape);
+export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
+
+export const restroomIdsSchema = z.object({
+  restroomIds: z.array(idField('دورة مياه غير صالحة.')).max(1000, 'عدد دورات المياه كبير جدًا.'),
+});
+
+export const buildingSchema = z.object({
+  name: z.string('أدخل اسم المبنى.').trim().min(2, 'اسم المبنى قصير جدًا.').max(120, 'اسم المبنى طويل جدًا.'),
+});
+
+export const restroomSchema = z.object({
+  code: z
+    .string('أدخل الترميز.')
+    .trim()
+    .toUpperCase()
+    .regex(RESTROOM_CODE_PATTERN, 'الترميز: من 2 إلى 40 حرفًا إنجليزيًا كبيرًا أو رقمًا أو -'),
+  name: z.string('أدخل اسم دورة المياه.').trim().min(2, 'الاسم قصير جدًا.').max(120, 'الاسم طويل جدًا.'),
+  floor: z.string('أدخل الدور.').trim().min(1, 'أدخل الدور.').max(60, 'اسم الدور طويل جدًا.'),
+  buildingId: idField('اختر المبنى.'),
+  monitorId: idField('اختر المراقب.').nullable().default(null),
+  isActive: z.boolean().default(true),
+});
+export type RestroomInput = z.infer<typeof restroomSchema>;
+
+export const bulkMonitorSchema = z.object({
+  restroomIds: z.array(idField('دورة مياه غير صالحة.')).min(1, 'اختر دورة مياه واحدة على الأقل.').max(1000),
+  monitorId: idField('اختر المراقب.').nullable(),
+});

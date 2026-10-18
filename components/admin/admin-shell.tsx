@@ -15,6 +15,8 @@ const NAV = [
   { href: '/admin/notes', label: 'الملاحظات والإجراءات', count: 'notes' },
   { href: '/admin/staff', label: 'أداء الموظفين المتميزين', count: 'staff' },
   { href: '/admin/qr', label: 'رموز QR', count: 'qr' },
+  { href: '/admin/users', label: 'المستخدمون والصلاحيات', count: null },
+  { href: '/admin/restrooms', label: 'المباني ودورات المياه', count: null },
   { href: '/admin/settings', label: 'الإعدادات والأوزان', count: null },
 ] as const;
 

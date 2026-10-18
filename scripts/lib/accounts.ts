@@ -1,33 +1,12 @@
 /** أدوات مشتركة لإنشاء الحسابات في Supabase Auth وربطها بجدول users */
-import { randomBytes, randomInt } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { generatePassword, internalEmail as internalEmailFor } from '../../lib/accounts';
 import { authEmailDomain } from './env';
 
-const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-const LOWER = 'abcdefghijkmnopqrstuvwxyz';
-const DIGITS = '23456789';
-const SYMBOLS = '-_.!@#';
+export { generatePassword };
 
-/** كلمة مرور عشوائية قوية (16 حرفًا) — لا كلمات مرور ثابتة إطلاقًا */
-export function generatePassword(length = 16): string {
-  const all = UPPER + LOWER + DIGITS + SYMBOLS;
-  const chars = [
-    UPPER[randomInt(UPPER.length)],
-    LOWER[randomInt(LOWER.length)],
-    DIGITS[randomInt(DIGITS.length)],
-    SYMBOLS[randomInt(SYMBOLS.length)],
-  ];
-  while (chars.length < length) chars.push(all[randomInt(all.length)]);
-  for (let i = chars.length - 1; i > 0; i--) {
-    const j = randomInt(i + 1);
-    [chars[i], chars[j]] = [chars[j], chars[i]];
-  }
-  return chars.join('');
-}
-
-/** بريد داخلي عشوائي غير قابل للتخمين يربط الحساب في Supabase Auth (الدخول باسم المستخدم فقط) */
 export function internalEmail(): string {
-  return `u-${randomBytes(10).toString('hex')}@${authEmailDomain()}`;
+  return internalEmailFor(authEmailDomain());
 }
 
 export async function findAuthUserByUsername(svc: SupabaseClient, username: string) {
@@ -135,7 +114,4 @@ export async function upsertAccount(
   return { id: authUserId, created: true, password };
 }
 
-export function newQrToken(): string {
-  // 24 بايت = 192 بت عشوائية (≥ 128 بت)، بترميز آمن للروابط
-  return randomBytes(24).toString('base64url');
-}
+export { newQrToken } from '../../lib/accounts';
