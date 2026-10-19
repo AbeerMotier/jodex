@@ -12,7 +12,7 @@ export interface EntryView {
   typeLabel: string;
   employee: { name: string; role: Role };
   onBehalfOf: string | null;
-  restroom: { id: string; name: string; floor: string; building: string };
+  restroom: { id: string; code: string; name: string; floor: string; building: string };
   evalType: string;
   result: number | null;
   status: { label: string; tone: Tone };
@@ -21,18 +21,19 @@ export interface EntryView {
 
 export function roomView(rooms: Map<string, RestroomRef>, id: string) {
   const r = rooms.get(id);
-  return { id, name: r?.name ?? '—', floor: r?.floor_label ?? '—', building: r?.building_name ?? '—' };
+  return { id, code: r?.code ?? '—', name: r?.name ?? '—', floor: r?.floor_label ?? '—', building: r?.building_name ?? '—' };
 }
 
 /** وصف مواقع المراقب: دورة واحدة كما هي، أو ملخص «N دورات مياه» مع المباني والأدوار */
 export function areaView(rooms: Map<string, RestroomRef>, ids: string[]) {
   if (ids.length === 1) return roomView(rooms, ids[0]);
   const list = ids.map((id) => rooms.get(id)).filter((r): r is RestroomRef => Boolean(r));
-  if (!list.length) return { id: '', name: '—', floor: '—', building: '—' };
+  if (!list.length) return { id: '', code: '—', name: '—', floor: '—', building: '—' };
   const floors = new Set(list.map((r) => r.floor_label));
   const buildings = [...new Set(list.map((r) => r.building_name))];
   return {
     id: list[0].id,
+    code: list.map((r) => r.code).join('، '),
     name: `${list.length} دورات مياه`,
     floor: floors.size === 1 ? [...floors][0] : `${floors.size} أدوار`,
     building: buildings.join('، '),
