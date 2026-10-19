@@ -55,6 +55,7 @@ interface TodayData {
   onBehalfOf: string | null;
   restroom: { id: string; name: string; code: string; floor: string; building: string };
   restrooms: RoomSummary[];
+  notice?: string | null;
   badge: { state: string; label: string; tone: Tone };
   defaultShift: Shift;
   deep: { required: boolean; weekday: number };
@@ -92,10 +93,10 @@ const OPTION_STYLE: Record<Answer, { bg: string; bd: string; c: string }> = {
 };
 const OPTIONS: Answer[] = ['done', 'partial', 'not_done'];
 
-export function MonitorApp({ userId }: { userId: string }) {
+export function MonitorApp({ userId, initialRestroomId = null }: { userId: string; initialRestroomId?: string | null }) {
   const toast = useToast();
   // دورة المياه المختارة (المراقب قد يكون مسؤولًا عن مبنى كامل)
-  const [roomId, setRoomId] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(initialRestroomId);
   const { data, error, loading, reload } = useApi<TodayData>(
     roomId ? `/api/monitor/today?restroom=${encodeURIComponent(roomId)}` : '/api/monitor/today',
   );
@@ -110,6 +111,13 @@ export function MonitorApp({ userId }: { userId: string }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
   const idemKeys = useRef<Record<string, string>>({});
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  // رمز QR ممسوح لدورة مياه خارج نطاق المراقب: تنبيه مرة واحدة
+  const [noticeShown, setNoticeShown] = useState(false);
+  if (data?.notice && !noticeShown) {
+    setNoticeShown(true);
+    toast.show(data.notice, 'error');
+  }
 
   // الجولة المعروضة افتراضيًا: تُثبَّت عند أول تحميل لكل دورة مياه (ولا تقفز أثناء التعبئة عند التحديث الدوري)
   const [shiftRoom, setShiftRoom] = useState<string | null>(null);

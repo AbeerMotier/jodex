@@ -213,7 +213,7 @@ export function RateExperience({
 
       <div className="pt-2.5 text-center text-[13px] text-muted">
         هل لديك حساب؟{' '}
-        <Link href="/login" className="text-ink underline underline-offset-[3px] hover:text-brand">
+        <Link href={`/go/${encodeURIComponent(token)}`} prefetch={false} className="text-ink underline underline-offset-[3px] hover:text-brand" data-testid="staff-login-link">
           تسجيل دخول الموظفين
         </Link>
       </div>

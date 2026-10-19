@@ -16,12 +16,18 @@ interface Detail {
   status: { label: string; tone: Tone };
   meta: { k: string; v: string | number | null; type: 'date' | 'time' | 'text' | 'pct' }[];
   answerHead: string;
-  rows: { title: string; answerLabel: string; tone: Tone; weight: number; points: number }[];
+  rows: { title: string; answerLabel: string; tone: Tone; weight: number; points: number; category?: string | null; statusLabel?: string | null }[];
+  /** تقييم المشرف: مجموع كل مجال (النظافة/الصيانة) والتصنيف النهائي */
+  subtotals?: { category: string; weight: number; points: number }[];
+  classification?: { label: string; tone: Tone } | null;
   formula: string;
   deepRows: { title: string; answerLabel: string; tone: Tone }[];
   photos: { label: string; url: string | null }[];
   note: string;
 }
+
+/** حتى منزلتين عشريتين بلا أصفار زائدة (مثل 89.92 و10.8) — مطابق لنموذج التقييم */
+const num2 = (v: number | null) => (v === null ? '—' : fmtNum(v, 2).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''));
 
 const TONE_TEXT: Record<Tone, string> = { success: '#3F7A62', warning: '#94711C', error: '#B5512F', neutral: '#2F4F44' };
 
@@ -71,12 +77,31 @@ export function DetailDrawer({ target, onClose }: { target: { kind: 'round' | 's
             <div className="flex items-center justify-between gap-3 rounded-[14px] bg-mint-3 px-4 py-3.5">
               <div>
                 <div className="text-[12.5px] text-ink-2">النتيجة النهائية</div>
-                <div className="tabular text-[28px] font-bold">{data.score === null ? '—' : `${fmtNum(data.score)}%`}</div>
+                <div className="tabular text-[28px] font-bold">{data.score === null ? '—' : `${num2(data.score)}%`}</div>
               </div>
-              <Chip tone={data.status.tone} size="md">
-                {data.status.label}
-              </Chip>
+              <div className="flex flex-col items-end gap-1.5">
+                <Chip tone={data.status.tone} size="md">
+                  {data.status.label}
+                </Chip>
+                {data.classification && (
+                  <Chip tone={data.classification.tone} size="md" data-testid="detail-classification">
+                    التصنيف: {data.classification.label}
+                  </Chip>
+                )}
+              </div>
             </div>
+            {data.subtotals && data.subtotals.length > 1 && (
+              <div className="grid grid-cols-2 gap-2" data-testid="detail-subtotals">
+                {data.subtotals.map((t) => (
+                  <div key={t.category} className="rounded-[12px] border border-line px-3 py-2.5">
+                    <div className="text-[12px] text-muted">{t.category}</div>
+                    <div className="tabular text-[17px] font-bold">
+                      {num2(t.points)} <span className="text-[12px] font-normal text-muted">من {num2(t.weight)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               {data.meta.map((m) => (
                 <div key={m.k}>
@@ -94,14 +119,20 @@ export function DetailDrawer({ target, onClose }: { target: { kind: 'round' | 's
                   <span>الوزن</span>
                   <span>المساهمة</span>
                 </div>
-                {data.rows.map((r) => (
-                  <div key={r.title} className="grid grid-cols-[minmax(0,1fr)_92px_52px_56px] items-center gap-2 border-t border-divider py-2 text-[13px]">
-                    <span>{r.title}</span>
-                    <span className="font-semibold" style={{ color: TONE_TEXT[r.tone] }}>
-                      {r.answerLabel}
-                    </span>
-                    <span className="tabular">{fmtNum(r.weight)}%</span>
-                    <span className="tabular font-semibold">{fmtNum(r.points)}</span>
+                {data.rows.map((r, i) => (
+                  <div key={`${r.category ?? ''}-${r.title}`}>
+                    {r.category && r.category !== data.rows[i - 1]?.category && (
+                      <div className="mt-1 border-t border-divider bg-[#F6F9F7] px-2 py-1.5 text-[12.5px] font-bold text-ink-2">{r.category}</div>
+                    )}
+                    <div className="grid grid-cols-[minmax(0,1fr)_92px_52px_56px] items-center gap-2 border-t border-divider py-2 text-[13px]">
+                      <span>{r.title}</span>
+                      <span className="font-semibold" style={{ color: TONE_TEXT[r.tone] }}>
+                        {r.answerLabel}
+                        {r.statusLabel && <span className="block text-[11.5px] font-normal">{r.statusLabel}</span>}
+                      </span>
+                      <span className="tabular">{num2(r.weight)}%</span>
+                      <span className="tabular font-semibold">{num2(r.points)}</span>
+                    </div>
                   </div>
                 ))}
                 <div className="mt-2 text-[12px] text-muted">

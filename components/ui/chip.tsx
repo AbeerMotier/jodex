@@ -9,9 +9,9 @@ export const TONE_COLORS: Record<Tone | 'monitor' | 'supervisor' | 'brand', { bg
   error: { bg: '#FCEDE7', c: '#B5512F' },
   neutral: { bg: '#EAF3EC', c: '#44665A' },
   brand: { bg: '#E6F2EA', c: '#3F7A62' },
-  // ألوان فئة المستخدم: مراقب المقاول أزرق، المشرف الميداني أحمر
-  monitor: { bg: '#E4EEF8', c: '#1F5F99' },
-  supervisor: { bg: '#F8E4E4', c: '#A12B2B' },
+  // شارة فئة المستخدم حسب ملف الهوية: أخضر رمادي فاتح بنص داكن
+  monitor: { bg: '#E4EEEA', c: '#2F4F44' },
+  supervisor: { bg: '#E0EEE6', c: '#2F4F44' },
 };
 
 type ChipTone = keyof typeof TONE_COLORS;
@@ -50,7 +50,7 @@ export function Chip({
   );
 }
 
-/** شارة الدور: مكتوبة بالنص دائمًا وبلون الفئة (مراقب = أزرق، مشرف = أحمر) */
+/** شارة الدور: مكتوبة بالنص دائمًا وبألوان ملف الهوية */
 export function RoleChip({ role, size = 'xs' }: { role: Role; size?: 'xs' | 'sm' | 'md' }) {
   const tone = role === 'supervisor' ? 'supervisor' : role === 'contractor_monitor' ? 'monitor' : 'neutral';
   return (

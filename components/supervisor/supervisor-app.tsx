@@ -20,7 +20,7 @@ interface SitesData {
   serverNow: string;
   today: string;
   supervisor: { id: string; name: string };
-  items: { id: string; title: string; description: string | null }[];
+  items: { id: string; title: string; description: string | null; category?: string | null }[];
   sites: { id: string; code: string; name: string; floor: string; building: string; lastSubmittedAt: string | null }[];
 }
 
@@ -50,7 +50,7 @@ function loadForm(userId: string, evalId: string): EvalForm {
   }
 }
 
-export function SupervisorApp({ userId }: { userId: string }) {
+export function SupervisorApp({ userId, initialSiteId = null }: { userId: string; initialSiteId?: string | null }) {
   const toast = useToast();
   const { data, error, loading, reload } = useApi<SitesData>('/api/supervisor/sites');
   const now = useServerClock(data?.serverNow, 15_000);
@@ -69,7 +69,7 @@ export function SupervisorApp({ userId }: { userId: string }) {
   const [success, setSuccess] = useState<{ title: string; sub: string; meta: string } | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
 
-  // اختيار الموقع: آخر موقع مستخدم أو الأول من المواقع المسندة (عند أول تحميل)
+  // اختيار الموقع: موقع رمز QR الممسوح، أو آخر موقع مستخدم، أو الأول من المواقع المسندة (عند أول تحميل)
   if (data && siteId === null) {
     let saved: string | null = null;
     try {
@@ -77,7 +77,9 @@ export function SupervisorApp({ userId }: { userId: string }) {
     } catch {
       saved = null;
     }
-    const pick = data.sites.find((s) => s.id === saved) ?? data.sites[0];
+    const scanned = initialSiteId ? data.sites.find((s) => s.id === initialSiteId) : undefined;
+    if (initialSiteId && !scanned) toast.show('دورة المياه التي مسحت رمزها ليست ضمن المواقع المسندة إليك.', 'error');
+    const pick = scanned ?? data.sites.find((s) => s.id === saved) ?? data.sites[0];
     if (pick) setSiteId(pick.id);
   }
 
@@ -342,33 +344,40 @@ export function SupervisorApp({ userId }: { userId: string }) {
                 {rated} من {items.length}
               </span>
             </div>
-            {items.map((item) => (
-              <div key={item.id} className="border-t border-divider py-3.5" data-testid={`rate-item-${item.id}`}>
-                <div className="mb-2.5 text-[15px] font-semibold">{item.title}</div>
-                <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label={item.title}>
-                  {([1, 2, 3, 4, 5] as Rating[]).map((v) => {
-                    const on = form.ratings[item.id] === v;
-                    const low = v <= 2;
-                    return (
-                      <button
-                        key={v}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        data-rating={v}
-                        onClick={() => update({ ratings: { ...form.ratings, [item.id]: v } })}
-                        className="flex min-h-[52px] flex-col items-center justify-center gap-px rounded-[11px] border px-0.5 py-1 transition-[background-color,transform] duration-150 hover:-translate-y-px"
-                        style={{
-                          background: on ? (low ? '#FCEDE7' : '#E6F2EA') : '#FFFFFF',
-                          color: on ? (low ? '#B5512F' : '#3F7A62') : '#2F4F44',
-                          borderColor: on ? (low ? '#E37452' : '#8EC3A6') : '#E3EAE6',
-                        }}
-                      >
-                        <span className="text-[12.5px] font-semibold">{RATING_LABEL[v]}</span>
-                        <span className="tabular text-[12px] opacity-80">{v}</span>
-                      </button>
-                    );
-                  })}
+            {items.map((item, index) => (
+              <div key={item.id}>
+                {item.category && item.category !== items[index - 1]?.category && (
+                  <div className="-mx-[18px] border-t border-divider bg-[#F6F9F7] px-[18px] py-2 text-[13.5px] font-bold text-ink-2" data-testid="rate-category">
+                    {item.category}
+                  </div>
+                )}
+                <div className="border-t border-divider py-3.5" data-testid={`rate-item-${item.id}`}>
+                  <div className="mb-2.5 text-[15px] font-semibold">{item.title}</div>
+                  <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label={item.title}>
+                    {([1, 2, 3, 4, 5] as Rating[]).map((v) => {
+                      const on = form.ratings[item.id] === v;
+                      const low = v <= 2;
+                      return (
+                        <button
+                          key={v}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          data-rating={v}
+                          onClick={() => update({ ratings: { ...form.ratings, [item.id]: v } })}
+                          className="flex min-h-[52px] flex-col items-center justify-center gap-px rounded-[11px] border px-0.5 py-1 transition-[background-color,transform] duration-150 hover:-translate-y-px"
+                          style={{
+                            background: on ? (low ? '#FCEDE7' : '#E6F2EA') : '#FFFFFF',
+                            color: on ? (low ? '#B5512F' : '#3F7A62') : '#2F4F44',
+                            borderColor: on ? (low ? '#E37452' : '#8EC3A6') : '#E3EAE6',
+                          }}
+                        >
+                          <span className="text-[12.5px] font-semibold">{RATING_LABEL[v]}</span>
+                          <span className="tabular text-[12px] opacity-80">{v}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             ))}

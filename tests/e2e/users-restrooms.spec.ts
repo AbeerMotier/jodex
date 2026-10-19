@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { serviceClient } from '../support/world';
-import { Api, browserAs, closeAll, world } from './helpers';
+import { Api, browserAs, closeAll, evaluateSite, world } from './helpers';
 
 const run = randomUUID().slice(0, 6);
 let admin: Api;
@@ -158,4 +158,79 @@ test('الواجهة: إضافة مستخدم تعرض كلمة المرور م�
   await expect.poll(async () => (await serviceClient().from('restrooms').select('monitor_id').eq('id', w.rooms.b.id).single()).data?.monitor_id).toBe(w.users.m2.id);
   expect(errors).toEqual([]);
   await closeAll(context);
+});
+
+test('مسح QR ثم دخول الموظف يفتح صفحة دوره على دورة المياه نفسها', async ({ browser }) => {
+  const w = world();
+  // المراقب m1 يمسح رمز دورته أ
+  {
+    const { context, page, errors } = await browserAs(browser, null, null);
+    await page.goto(`/r/${w.rooms.a.token}`);
+    await page.getByTestId('staff-login-link').click();
+    await page.waitForURL(/\/login\?next=/);
+    await page.fill('input[name=username]', w.users.m1.username);
+    await page.fill('input[name=password]', w.users.m1.password);
+    await Promise.all([page.waitForURL(/\/monitor\?restroom=/), page.click('button[type=submit]')]);
+    expect(new URL(page.url()).searchParams.get('restroom')).toBe(w.rooms.a.id);
+    await expect(page.getByTestId('monitor-name')).toBeVisible();
+    expect(errors).toEqual([]);
+    await closeAll(context);
+  }
+  // المشرف sup (مسند إليه أ و ب) يمسح رمز ب ← يُختار موقع ب
+  {
+    const { context, page } = await browserAs(browser, w.users.sup, null);
+    await page.goto(`/go/${w.rooms.b.token}`);
+    await page.waitForURL(/\/supervisor\?restroom=/);
+    expect(new URL(page.url()).searchParams.get('restroom')).toBe(w.rooms.b.id);
+    await expect(page.getByTestId('site-select')).toHaveValue(w.rooms.b.id);
+    await closeAll(context);
+  }
+});
+
+test('الأدمن يغيّر اسم المستخدم ويحدد كلمة المرور بنفسه، ويحذف دورة مياه ومبنى بلا سجل', async () => {
+  const u = await createUser({ username: `qa${run}.ren`, fullName: 'إعادة التسمية', role: 'admin' });
+  await admin.json(admin.ctx.patch(`/api/admin/users/${u.id}`, { headers: admin.headers(), data: { username: `qa${run}.renamed` } }));
+  await admin.json(admin.post(`/api/admin/users/${u.id}/password`, { password: 'Chosen-Pass-77' }));
+  expect(await loginStatus(`qa${run}.ren`, 'Chosen-Pass-77')).toBe(401);
+  expect(await loginStatus(`qa${run}.renamed`, 'Chosen-Pass-77')).toBe(200);
+  await admin.json(admin.post(`/api/admin/users/${u.id}/password`, { password: 'short' }), 422);
+
+  const b = await admin.json<{ id: string }>(admin.post('/api/admin/buildings', { name: `مبنى مؤقت ${run}` }));
+  const r = await admin.json<{ id: string }>(admin.post('/api/admin/restrooms', { code: `TMP-${run.toUpperCase()}`, name: 'دورة مؤقتة', floor: 'الأول', buildingId: b.id }));
+  await admin.json(admin.ctx.delete(`/api/admin/buildings/${b.id}`, { headers: admin.headers() }), 409); // فيه دورة مياه
+  await admin.json(admin.ctx.delete(`/api/admin/restrooms/${r.id}`, { headers: admin.headers() }));
+  await admin.json(admin.ctx.delete(`/api/admin/buildings/${b.id}`, { headers: admin.headers() }));
+  // دورة مياه لها سجل لا تُحذف
+  const { count } = await serviceClient().from('rounds').select('id', { count: 'exact', head: true }).eq('restroom_id', world().rooms.a.id).neq('status', 'pending');
+  if ((count ?? 0) > 0) await admin.json(admin.ctx.delete(`/api/admin/restrooms/${world().rooms.a.id}`, { headers: admin.headers() }), 409);
+});
+
+test('مجالات البنود: تُحفظ من الإعدادات، وتظهر في تفاصيل التقييم بمجموع كل مجال والتصنيف', async () => {
+  interface Item { id: string; group: string; title: string; description: string | null; category: string | null; weight: number | null; isActive: boolean }
+  const s = await admin.json<{ partialCreditPct: number; deepCleanWeekday: number; items: Item[] }>(admin.get('/api/admin/settings'));
+  const sup = s.items.filter((i) => i.group === 'supervisor' && i.isActive);
+  const half = Math.ceil(sup.length / 2);
+  const categoryOf = new Map(sup.map((i, idx) => [i.id, idx < half ? 'النظافة' : 'الصيانة']));
+  await admin.json(
+    admin.put('/api/admin/settings', {
+      partialCreditPct: s.partialCreditPct,
+      deepCleanWeekday: s.deepCleanWeekday,
+      recalc: 'none',
+      items: s.items.map((i) => ({ id: i.id, group: i.group, title: i.title, description: i.description, category: categoryOf.get(i.id) ?? i.category, weight: i.weight, isActive: i.isActive })),
+    }),
+  );
+  const after = await admin.json<{ items: Item[] }>(admin.get('/api/admin/settings'));
+  expect(after.items.filter((i) => categoryOf.has(i.id)).every((i) => i.category === categoryOf.get(i.id))).toBe(true);
+
+  const supApi = await Api.as(world().users.sup);
+  const { res, evaluationId } = await evaluateSite(supApi, world().rooms.a.id, () => 4);
+  expect(res.status(), await res.text()).toBe(200);
+  const detail = await admin.json<{ score: number; subtotals: { category: string; points: number }[]; classification: { label: string } }>(
+    admin.get(`/api/admin/log/supervisor/${evaluationId}`),
+  );
+  expect(detail.score).toBe(80);
+  expect(detail.subtotals.map((t) => t.category)).toEqual(['النظافة', 'الصيانة']);
+  expect(detail.subtotals.reduce((t, x) => t + x.points, 0)).toBeCloseTo(80, 1);
+  expect(detail.classification.label).toBe('جيد جداً');
+  await supApi.dispose();
 });

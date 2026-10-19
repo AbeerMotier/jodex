@@ -161,7 +161,14 @@ export async function updateUser(actor: SessionUser, id: string, input: UserUpda
     await assertPrimary(substituteFor);
   }
 
+  const username = input.username ?? user.username;
+  if (username !== user.username) {
+    const { data: taken } = await svc.from('users').select('id').eq('username', username).maybeSingle();
+    if (taken) throw new ApiError(409, 'username_taken', 'اسم المستخدم مستخدم مسبقًا.', { username: 'اسم المستخدم مستخدم مسبقًا.' });
+  }
+
   const patch = {
+    username,
     full_name: input.fullName ?? user.full_name,
     role,
     monitor_kind: kind,
@@ -176,7 +183,8 @@ export async function updateUser(actor: SessionUser, id: string, input: UserUpda
     await svc.from('supervisor_assignments').delete().eq('supervisor_id', user.id);
   }
   const authPatch: { app_metadata?: Record<string, string>; ban_duration?: string } = {};
-  if (role !== user.role) authPatch.app_metadata = { jodex_role: role, jodex_username: user.username };
+  if (role !== user.role || username !== user.username) authPatch.app_metadata = { jodex_role: role, jodex_username: username };
+  if (username !== user.username) await svc.from('login_attempts').delete().eq('username', user.username);
   if (patch.is_active !== user.is_active) authPatch.ban_duration = patch.is_active ? 'none' : BANNED;
   if (Object.keys(authPatch).length) {
     const { error: authErr } = await svc.auth.admin.updateUserById(user.id, authPatch);
@@ -184,24 +192,24 @@ export async function updateUser(actor: SessionUser, id: string, input: UserUpda
   }
   await audit(actor.id, 'users.update', 'users', user.id, {
     username: user.username,
-    before: { full_name: user.full_name, role: user.role, monitor_kind: user.monitor_kind, substitute_for_id: user.substitute_for_id, is_active: user.is_active },
+    before: { username: user.username, full_name: user.full_name, role: user.role, monitor_kind: user.monitor_kind, substitute_for_id: user.substitute_for_id, is_active: user.is_active },
     after: patch,
   });
   return { ok: true };
 }
 
-/** كلمة مرور جديدة عشوائية تُعرض للأدمن مرة واحدة، ويُفك أي قفل دخول */
-export async function resetUserPassword(actor: SessionUser, id: string) {
+/** كلمة مرور جديدة (يكتبها الأدمن أو عشوائية) تُعرض له مرة واحدة، ويُفك أي قفل دخول */
+export async function resetUserPassword(actor: SessionUser, id: string, chosen?: string) {
   const user = await loadUser(id);
   const svc = createServiceClient();
-  const password = generatePassword(12);
+  const password = chosen ?? generatePassword(12);
   const { error } = await svc.auth.admin.updateUserById(user.id, { password, ...(user.is_active ? { ban_duration: 'none' } : {}) });
   if (error) {
     console.error('[jodex] admin resetPassword failed', error.message);
     throw new ApiError(500, 'server_error', 'تعذّر تغيير كلمة المرور. حاول مرة أخرى.');
   }
   await svc.from('login_attempts').delete().eq('username', user.username);
-  await audit(actor.id, 'users.reset_password', 'users', user.id, { username: user.username });
+  await audit(actor.id, 'users.reset_password', 'users', user.id, { username: user.username, chosen_by_admin: Boolean(chosen) });
   return { username: user.username, password };
 }
 

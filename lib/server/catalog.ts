@@ -8,6 +8,8 @@ export interface ChecklistItem {
   group: ItemGroup;
   title: string;
   description: string | null;
+  /** المجال (مثل النظافة/الصيانة) — اختياري */
+  category: string | null;
   weight: number | null;
   default_weight: number | null;
   is_default: boolean;
@@ -21,7 +23,7 @@ export interface AppSettings {
   updated_at: string | null;
 }
 
-const ITEM_COLUMNS = 'id, key, group, title, description, weight, default_weight, is_default, sort_order, is_active';
+const ITEM_COLUMNS = 'id, key, group, title, description, category, weight, default_weight, is_default, sort_order, is_active';
 
 function normalizeItem(row: Record<string, unknown>): ChecklistItem {
   return {
@@ -30,6 +32,7 @@ function normalizeItem(row: Record<string, unknown>): ChecklistItem {
     group: row.group as ItemGroup,
     title: String(row.title),
     description: (row.description as string | null) ?? null,
+    category: (row.category as string | null) ?? null,
     weight: row.weight === null || row.weight === undefined ? null : Number(row.weight),
     default_weight: row.default_weight === null || row.default_weight === undefined ? null : Number(row.default_weight),
     is_default: Boolean(row.is_default),
@@ -43,7 +46,25 @@ export async function loadItems(options: { activeOnly?: boolean } = {}): Promise
   if (options.activeOnly) query = query.eq('is_active', true);
   const { data, error } = await query.order('group').order('sort_order').order('created_at');
   if (error) throw new Error(`loadItems: ${error.message}`);
-  return (data ?? []).map((r) => normalizeItem(r as Record<string, unknown>));
+  return groupByCategory((data ?? []).map((r) => normalizeItem(r as Record<string, unknown>)));
+}
+
+/** ترتيب ثابت يجمع بنود المجال الواحد معًا داخل كل مجموعة (بترتيب أول ظهور للمجال) */
+export function groupByCategory(items: ChecklistItem[]): ChecklistItem[] {
+  const firstSeen = new Map<string, number>();
+  items.forEach((i, idx) => {
+    const key = `${i.group}|${i.category ?? ''}`;
+    if (!firstSeen.has(key)) firstSeen.set(key, idx);
+  });
+  return items
+    .map((item, idx) => ({ item, idx }))
+    .sort((a, b) => {
+      if (a.item.group !== b.item.group) return a.idx - b.idx;
+      const ka = firstSeen.get(`${a.item.group}|${a.item.category ?? ''}`)!;
+      const kb = firstSeen.get(`${b.item.group}|${b.item.category ?? ''}`)!;
+      return ka - kb || a.idx - b.idx;
+    })
+    .map((x) => x.item);
 }
 
 export async function loadActiveItemsByGroup(): Promise<Record<ItemGroup, ChecklistItem[]>> {

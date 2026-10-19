@@ -219,14 +219,14 @@ test('لوحة الأدمن: أحدث الجولات 4 بالضبط ومجاور
     const sup = await computedColors(page, '[data-testid="recent-item"] [data-role-chip="supervisor"]');
     expect(mon.length).toBeGreaterThan(0);
     expect(sup.length).toBeGreaterThan(0);
-    for (const c of mon) expect(c).toMatchObject({ color: rgb('#1F5F99'), background: rgb('#E4EEF8'), text: 'مراقب المقاول' });
-    for (const c of sup) expect(c).toMatchObject({ color: rgb('#A12B2B'), background: rgb('#F8E4E4'), text: 'المشرف الميداني' });
+    for (const c of mon) expect(c).toMatchObject({ color: rgb('#2F4F44'), background: rgb('#E4EEEA'), text: 'مراقب المقاول' });
+    for (const c of sup) expect(c).toMatchObject({ color: rgb('#2F4F44'), background: rgb('#E0EEE6'), text: 'المشرف الميداني' });
 
-    // ألوان الفئة في الرسم ومفتاحه: المراقب أزرق والمشرف أحمر
+    // ألوان الفئة في الرسم ومفتاحه حسب ملف الهوية
     const legend = page.getByTestId('chart-legend');
     const swatch = async (s: string) => legend.locator(`[data-series="${s}"] > span`).first().evaluate((el) => getComputedStyle(el).backgroundColor);
-    expect(await swatch('contractor')).toBe(rgb('#2F6FB0'));
-    expect(await swatch('supervisor')).toBe(rgb('#C24545'));
+    expect(await swatch('contractor')).toBe(rgb('#2F4F44'));
+    expect(await swatch('supervisor')).toBe(rgb('#8EC3A6'));
     await expect(legend).toContainText('مراقب المقاول');
     await expect(legend).toContainText('المشرف الميداني');
     const bars = await page
@@ -235,7 +235,7 @@ test('لوحة الأدمن: أحدث الجولات 4 بالضبط ومجاور
       .evaluateAll((els) => els.map((el) => [el.parentElement!.getAttribute('data-series'), getComputedStyle(el).backgroundColor]));
     for (const [series, color] of bars) {
       if (color === rgb('#D3DED8')) continue; // لا بيانات
-      expect(color).toBe(series === 'contractor' ? rgb('#2F6FB0') : rgb('#C24545'));
+      expect(color).toBe(series === 'contractor' ? rgb('#2F4F44') : rgb('#8EC3A6'));
     }
 
     // عدّادات الشريط الجانبي تتبع الفترة، ورموز QR = عدد دورات المياه

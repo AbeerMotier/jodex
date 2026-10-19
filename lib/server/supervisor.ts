@@ -55,7 +55,7 @@ export async function supervisorSites(user: SessionUser, now: Date) {
     serverNow: now.toISOString(),
     today,
     supervisor: { id: user.id, name: user.fullName },
-    items: items.supervisor.map((i) => ({ id: i.id, title: i.title, description: i.description })),
+    items: items.supervisor.map((i) => ({ id: i.id, title: i.title, description: i.description, category: i.category })),
     sites: (rooms ?? []).map((r) => {
       const mine = (evals ?? []).filter((e) => e.restroom_id === r.id);
       const submitted = mine.filter((e) => e.submitted_at).sort((a, b) => (a.submitted_at! < b.submitted_at! ? 1 : -1));
@@ -314,7 +314,7 @@ export async function submitEvaluation(user: SessionUser, input: EvaluationSubmi
   const note = buildSupervisorNote(lowTitles, input.note);
   const snapshot = {
     version: 1,
-    items: items.map((i) => ({ id: i.id, key: i.key, title: i.title, weight: Number(i.weight ?? 0), group: 'supervisor' })),
+    items: items.map((i) => ({ id: i.id, key: i.key, title: i.title, category: i.category, weight: Number(i.weight ?? 0), group: 'supervisor' })),
   };
   const { data, error } = await createServiceClient().rpc('submit_evaluation_tx', {
     p_evaluation_id: evaluation.id,

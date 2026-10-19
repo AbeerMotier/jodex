@@ -141,3 +141,37 @@ export async function assignMonitor(actor: SessionUser, restroomIds: string[], m
   await audit(actor.id, 'restrooms.assign_monitor', 'restrooms', null, { restroom_ids: ids, monitor_id: monitorId });
   return { count: (data ?? []).length };
 }
+
+/** حذف دورة مياه بلا سجل تاريخي (جولات مرسلة/فائتة أو تقييمات). ذات السجل تُعطَّل بدل الحذف. */
+export async function deleteRestroom(actor: SessionUser, id: string) {
+  const svc = createServiceClient();
+  const { data: room } = await svc.from('restrooms').select('id, code, name').eq('id', id).maybeSingle();
+  if (!room) throw new ApiError(404, 'not_found', 'دورة المياه غير موجودة.');
+  const [rounds, evals, feedback] = await Promise.all([
+    svc.from('rounds').select('id', { count: 'exact', head: true }).eq('restroom_id', id).neq('status', 'pending'),
+    svc.from('supervisor_evaluations').select('id', { count: 'exact', head: true }).eq('restroom_id', id),
+    svc.from('beneficiary_feedback').select('id', { count: 'exact', head: true }).eq('restroom_id', id),
+  ]);
+  if ((rounds.count ?? 0) + (evals.count ?? 0) + (feedback.count ?? 0) > 0) {
+    throw new ApiError(409, 'has_history', 'لدورة المياه جولات أو تقييمات محفوظة، فلا يمكن حذفها حفاظًا على السجل. عطّلها بدلًا من ذلك.');
+  }
+  const { error: roundsErr } = await svc.from('rounds').delete().eq('restroom_id', id).eq('status', 'pending');
+  if (roundsErr) throw new Error(roundsErr.message);
+  const { error } = await svc.from('restrooms').delete().eq('id', id);
+  if (error) throw new ApiError(409, 'has_history', 'تعذّر حذف دورة المياه لارتباطها بسجلات أخرى. عطّلها بدلًا من ذلك.');
+  await audit(actor.id, 'restrooms.delete', 'restrooms', id, { code: room.code, name: room.name });
+  return { ok: true };
+}
+
+/** حذف مبنى فارغ (بلا دورات مياه) */
+export async function deleteBuilding(actor: SessionUser, id: string) {
+  const svc = createServiceClient();
+  const { data: building } = await svc.from('buildings').select('id, name').eq('id', id).maybeSingle();
+  if (!building) throw new ApiError(404, 'not_found', 'المبنى غير موجود.');
+  const { count } = await svc.from('restrooms').select('id', { count: 'exact', head: true }).eq('building_id', id);
+  if ((count ?? 0) > 0) throw new ApiError(409, 'building_not_empty', 'لا يمكن حذف مبنى فيه دورات مياه. احذفها أو انقلها لمبنى آخر أولًا.');
+  const { error } = await svc.from('buildings').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+  await audit(actor.id, 'buildings.delete', 'buildings', id, { name: building.name });
+  return { ok: true };
+}

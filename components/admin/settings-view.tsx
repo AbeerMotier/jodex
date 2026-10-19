@@ -21,6 +21,7 @@ interface ServerItem {
   group: ItemGroup;
   title: string;
   description: string | null;
+  category: string | null;
   weight: number | null;
   defaultWeight: number | null;
   isDefault: boolean;
@@ -40,6 +41,7 @@ interface DraftItem {
   group: ItemGroup;
   title: string;
   description: string;
+  category: string;
   weight: number | null;
   isActive: boolean;
   isDefault: boolean;
@@ -68,6 +70,7 @@ function toDraft(items: ServerItem[]): DraftItem[] {
     group: i.group,
     title: i.title,
     description: i.description ?? '',
+    category: i.category ?? '',
     weight: i.weight,
     isActive: i.isActive,
     isDefault: i.isDefault,
@@ -148,6 +151,7 @@ export function SettingsView() {
               group: i.group,
               title: i.title,
               description: i.description || null,
+              category: i.category.trim() || null,
               weight: i.group === 'deep' ? null : i.weight,
               isActive: i.isActive,
               delete: Boolean(i.deleted),
@@ -223,60 +227,73 @@ export function SettingsView() {
               </div>
               {sec.hint && <div className="mb-1 text-[12.5px] text-muted">{sec.hint}</div>}
               {list.length === 0 && <div className="border-t border-divider py-4 text-[13px] text-muted">لا توجد بنود في هذه المجموعة.</div>}
-              {list.map((i) => (
-                <div key={i.uid} className="flex items-center justify-between gap-3 border-t border-divider py-[9px] text-[13.5px]" data-testid="settings-item">
-                  <span className="min-w-0 flex-1">
-                    <span className={i.isActive ? '' : 'text-muted line-through decoration-1'}>{i.title}</span>
-                    {!i.isActive && (
-                      <Chip tone="neutral" size="sm" className="ms-1.5">
-                        معطّل
-                      </Chip>
-                    )}
-                    {!i.id && (
-                      <Chip tone="warning" size="sm" className="ms-1.5">
-                        جديد
-                      </Chip>
-                    )}
-                  </span>
-                  <span className="flex flex-none items-center gap-1">
-                    {scored && (
-                      <span className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.5"
-                          inputMode="decimal"
-                          aria-label={`وزن ${i.title}`}
-                          value={i.weight ?? ''}
-                          disabled={!i.isActive}
-                          onChange={(e) => {
-                            const v = e.target.value === '' ? null : Math.max(0, Math.min(100, Number(e.target.value)));
-                            patch(i.uid, { weight: v });
-                          }}
-                          className="tabular h-10 w-16 rounded-[9px] border border-line px-1 text-center text-[14px] outline-ink disabled:bg-page"
-                        />
-                        %
-                      </span>
-                    )}
-                    <label className="flex h-10 cursor-pointer items-center gap-1 px-1 text-[12px] text-muted" title={i.isActive ? 'تعطيل البند' : 'تفعيل البند'}>
-                      <input type="checkbox" checked={i.isActive} onChange={(e) => patch(i.uid, { isActive: e.target.checked })} className="h-4 w-4 accent-[#55957A]" aria-label={`فعّال: ${i.title}`} />
-                      فعّال
-                    </label>
-                    <button type="button" onClick={() => setEditing(i)} aria-label={`تعديل ${i.title}`} className="flex h-10 w-9 items-center justify-center rounded-[9px] text-ink hover:bg-mint-5">
-                      <IconEdit size={17} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => remove(i)}
-                      aria-label={`حذف ${i.title}`}
-                      title={i.inUse ? 'له إجابات محفوظة — يمكن تعطيله فقط' : 'حذف البند'}
-                      className="flex h-10 w-9 items-center justify-center rounded-[9px] hover:bg-err-bg"
-                      style={{ color: i.inUse ? '#A9BBB2' : '#B5512F' }}
-                    >
-                      <IconTrash size={17} />
-                    </button>
-                  </span>
+              {list.map((i, index) => (
+                <div key={i.uid}>
+                  {i.category && i.category !== list[index - 1]?.category && (
+                    <div className="flex items-center justify-between gap-2 border-t border-divider bg-[#F6F9F7] px-2 py-1.5 text-[12.5px] font-bold text-ink-2" data-testid="settings-category">
+                      <span>{i.category}</span>
+                      {scored && (
+                        <span className="tabular font-semibold text-muted">
+                          مجموع المجال{' '}
+                          <bdi dir="ltr">{fmtNum(list.filter((x) => x.category === i.category && x.isActive).reduce((t, x) => t + (x.weight ?? 0), 0))}%</bdi>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3 border-t border-divider py-[9px] text-[13.5px]" data-testid="settings-item">
+                    <span className="min-w-0 flex-1">
+                      <span className={i.isActive ? '' : 'text-muted line-through decoration-1'}>{i.title}</span>
+                      {!i.isActive && (
+                        <Chip tone="neutral" size="sm" className="ms-1.5">
+                          معطّل
+                        </Chip>
+                      )}
+                      {!i.id && (
+                        <Chip tone="warning" size="sm" className="ms-1.5">
+                          جديد
+                        </Chip>
+                      )}
+                    </span>
+                    <span className="flex flex-none items-center gap-1">
+                      {scored && (
+                        <span className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step="0.01"
+                            inputMode="decimal"
+                            aria-label={`وزن ${i.title}`}
+                            value={i.weight ?? ''}
+                            disabled={!i.isActive}
+                            onChange={(e) => {
+                              const v = e.target.value === '' ? null : Math.max(0, Math.min(100, Number(e.target.value)));
+                              patch(i.uid, { weight: v });
+                            }}
+                            className="tabular h-10 w-16 rounded-[9px] border border-line px-1 text-center text-[14px] outline-ink disabled:bg-page"
+                          />
+                          %
+                        </span>
+                      )}
+                      <label className="flex h-10 cursor-pointer items-center gap-1 px-1 text-[12px] text-muted" title={i.isActive ? 'تعطيل البند' : 'تفعيل البند'}>
+                        <input type="checkbox" checked={i.isActive} onChange={(e) => patch(i.uid, { isActive: e.target.checked })} className="h-4 w-4 accent-[#55957A]" aria-label={`فعّال: ${i.title}`} />
+                        فعّال
+                      </label>
+                      <button type="button" onClick={() => setEditing(i)} aria-label={`تعديل ${i.title}`} className="flex h-10 w-9 items-center justify-center rounded-[9px] text-ink hover:bg-mint-5">
+                        <IconEdit size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => remove(i)}
+                        aria-label={`حذف ${i.title}`}
+                        title={i.inUse ? 'له إجابات محفوظة — يمكن تعطيله فقط' : 'حذف البند'}
+                        className="flex h-10 w-9 items-center justify-center rounded-[9px] hover:bg-err-bg"
+                        style={{ color: i.inUse ? '#A9BBB2' : '#B5512F' }}
+                      >
+                        <IconTrash size={17} />
+                      </button>
+                    </span>
+                  </div>
                 </div>
               ))}
               {sum && !sum.valid && <div className="mt-2 text-[12.5px] text-err-ink">{GROUP_SUM_MESSAGE[sec.group as 'contractor' | 'supervisor']}</div>}
@@ -374,6 +391,7 @@ export function SettingsView() {
 
       <ItemDialog
         item={editing}
+        categories={[...new Set(items.map((i) => i.category.trim()).filter(Boolean))]}
         onClose={() => setEditing(null)}
         onSave={(it) => {
           if (editing === 'new') setItems((list) => [...list, it]);
@@ -386,12 +404,23 @@ export function SettingsView() {
   );
 }
 
-function ItemDialog({ item, onClose, onSave }: { item: DraftItem | 'new' | null; onClose: () => void; onSave: (i: DraftItem) => void }) {
+function ItemDialog({
+  item,
+  categories,
+  onClose,
+  onSave,
+}: {
+  item: DraftItem | 'new' | null;
+  categories: string[];
+  onClose: () => void;
+  onSave: (i: DraftItem) => void;
+}) {
   const isNew = item === 'new';
   const [evalType, setEvalType] = useState<'contractor_round' | 'supervisor_evaluation'>('contractor_round');
   const [group, setGroup] = useState<ItemGroup>('contractor');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
   const [weight, setWeight] = useState<string>('0');
   const [active, setActive] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -405,6 +434,7 @@ function ItemDialog({ item, onClose, onSave }: { item: DraftItem | 'new' | null;
       setGroup('contractor');
       setTitle('');
       setDescription('');
+      setCategory('');
       setWeight('0');
       setActive(true);
     } else {
@@ -412,6 +442,7 @@ function ItemDialog({ item, onClose, onSave }: { item: DraftItem | 'new' | null;
       setGroup(item.group);
       setTitle(item.title);
       setDescription(item.description);
+      setCategory(item.category);
       setWeight(item.weight === null ? '' : String(item.weight));
       setActive(item.isActive);
     }
@@ -428,6 +459,7 @@ function ItemDialog({ item, onClose, onSave }: { item: DraftItem | 'new' | null;
       group,
       title,
       description: description || null,
+      category: category || null,
       weight: scored ? (weight === '' ? null : Number(weight)) : null,
       isActive: active,
     });
@@ -437,9 +469,9 @@ function ItemDialog({ item, onClose, onSave }: { item: DraftItem | 'new' | null;
     setErrors(errs);
     if (Object.keys(errs).length) return;
     const base: DraftItem = isNew
-      ? { uid: `new-${crypto.randomUUID()}`, id: null, group, title: '', description: '', weight: null, isActive: true, isDefault: false, defaultWeight: null, inUse: false }
+      ? { uid: `new-${crypto.randomUUID()}`, id: null, group, title: '', description: '', category: '', weight: null, isActive: true, isDefault: false, defaultWeight: null, inUse: false }
       : (item as DraftItem);
-    onSave({ ...base, group, title: title.trim(), description: description.trim(), weight: scored ? Number(weight) : null, isActive: active });
+    onSave({ ...base, group, title: title.trim(), description: description.trim(), category: category.trim(), weight: scored ? Number(weight) : null, isActive: active });
   }
 
   return (
@@ -453,6 +485,16 @@ function ItemDialog({ item, onClose, onSave }: { item: DraftItem | 'new' | null;
         <label className="flex flex-col gap-1.5">
           <span className="text-[12.5px] font-bold text-muted">الوصف (اختياري)</span>
           <input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} className="min-h-11 rounded-[11px] border border-line px-3 text-[14px] outline-ink" />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[12.5px] font-bold text-muted">المجال (اختياري)</span>
+          <input value={category} onChange={(e) => setCategory(e.target.value)} maxLength={60} list="item-categories" placeholder="مثل: النظافة، الصيانة" data-testid="item-category" className="min-h-11 rounded-[11px] border border-line px-3 text-[14px] outline-ink" />
+          <datalist id="item-categories">
+            {categories.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+          {errors.category && <span className="text-[12px] text-err-ink">{errors.category}</span>}
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-[12.5px] font-bold text-muted">نوع التقييم</span>
@@ -492,7 +534,7 @@ function ItemDialog({ item, onClose, onSave }: { item: DraftItem | 'new' | null;
         {scored && (
           <label className="flex flex-col gap-1.5">
             <span className="text-[12.5px] font-bold text-muted">الوزن (%)</span>
-            <input type="number" min={0} max={100} step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} data-testid="item-weight" className="tabular min-h-11 w-32 rounded-[11px] border border-line px-3 text-[14px] outline-ink" />
+            <input type="number" min={0} max={100} step="0.01" value={weight} onChange={(e) => setWeight(e.target.value)} data-testid="item-weight" className="tabular min-h-11 w-32 rounded-[11px] border border-line px-3 text-[14px] outline-ink" />
             {errors.weight && <span className="text-[12px] text-err-ink">{errors.weight}</span>}
             <span className="text-[12px] text-muted">تأكد أن مجموع أوزان البنود الفعالة في المجموعة يبقى 100% قبل الحفظ.</span>
           </label>

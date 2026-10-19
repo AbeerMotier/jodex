@@ -4,7 +4,6 @@ import { Chip } from '@/components/ui/chip';
 import { IconEdit, IconPlus } from '@/components/ui/icons';
 import { Modal } from '@/components/ui/overlay';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiClientError } from '@/lib/client/api';
 import { useApi } from '@/lib/client/use-api';
@@ -72,6 +71,7 @@ export function UsersView() {
   const [linking, setLinking] = useState<UserView | null>(null);
   const [secret, setSecret] = useState<{ title: string; username: string; password: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [passwordFor, setPasswordFor] = useState<UserView | null>(null);
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -82,19 +82,6 @@ export function UsersView() {
         (!term || u.fullName.toLowerCase().includes(term) || u.username.includes(term)),
     );
   }, [data, tab, q, showInactive]);
-
-  async function resetPassword(u: UserView) {
-    if (!window.confirm(`إنشاء كلمة مرور جديدة لـ ${u.fullName}؟ ستتوقف كلمة المرور الحالية.`)) return;
-    setBusy(u.id);
-    try {
-      const res = await api<{ username: string; password: string }>(`/api/admin/users/${u.id}/password`, { method: 'POST' });
-      setSecret({ title: 'كلمة مرور جديدة', ...res });
-    } catch (e) {
-      toast.show(e instanceof ApiClientError ? e.message : 'تعذّر تغيير كلمة المرور.', 'error');
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function toggleActive(u: UserView) {
     if (u.isActive && !window.confirm(`تعطيل حساب ${u.fullName}؟ لن يتمكن من الدخول حتى يُعاد تفعيله.`)) return;
@@ -211,9 +198,8 @@ export function UsersView() {
                       {u.role === 'supervisor' ? 'المواقع' : 'دورات المياه'}
                     </button>
                   )}
-                  <button type="button" className={BTN_SMALL} disabled={busy === u.id} onClick={() => resetPassword(u)} data-testid={`user-reset-${u.username}`}>
-                    {busy === u.id && <Spinner size={12} />}
-                    كلمة مرور جديدة
+                  <button type="button" className={BTN_SMALL} onClick={() => setPasswordFor(u)} data-testid={`user-reset-${u.username}`}>
+                    كلمة المرور
                   </button>
                   <button type="button" className={BTN_SMALL} disabled={busy === u.id} onClick={() => toggleActive(u)} data-testid={`user-toggle-${u.username}`}>
                     {u.isActive ? 'تعطيل' : 'تفعيل'}
@@ -248,6 +234,14 @@ export function UsersView() {
           }}
         />
       )}
+      <SetPasswordDialog
+        user={passwordFor}
+        onClose={() => setPasswordFor(null)}
+        onDone={(res) => {
+          setPasswordFor(null);
+          setSecret({ title: 'تم تغيير كلمة المرور', ...res });
+        }}
+      />
       <PasswordDialog value={secret} onClose={() => setSecret(null)} />
     </>
   );
@@ -300,7 +294,7 @@ function UserDialog({
 
   async function submit() {
     const payload = {
-      ...(isNew ? { username } : {}),
+      ...(isNew || username !== editingUser?.username ? { username } : {}),
       fullName,
       role,
       monitorKind: isMonitor ? kind : null,
@@ -334,8 +328,8 @@ function UserDialog({
   return (
     <Modal open={Boolean(target)} onClose={onClose} title={isNew ? 'إضافة مستخدم' : 'تعديل مستخدم'} width={480}>
       <div className="flex flex-col gap-3.5" data-testid="user-dialog">
-        <Field label="اسم المستخدم (للدخول)" error={errors.username} hint={isNew ? 'حروف إنجليزية صغيرة وأرقام و . _ - (مثل ahmed.k)' : 'لا يمكن تغيير اسم المستخدم.'}>
-          <input dir="ltr" value={username} disabled={!isNew} onChange={(e) => setUsername(e.target.value.toLowerCase())} maxLength={32} className={`${INPUT} text-left`} data-testid="user-username" />
+        <Field label="اسم المستخدم (للدخول)" error={errors.username} hint="حروف إنجليزية صغيرة وأرقام و . _ - (مثل ahmed.k)">
+          <input dir="ltr" value={username} onChange={(e) => setUsername(e.target.value.toLowerCase())} maxLength={32} className={`${INPUT} text-left`} data-testid="user-username" />
         </Field>
         <Field label="الاسم الكامل" error={errors.fullName}>
           <input value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={120} className={INPUT} data-testid="user-fullname" />
@@ -428,6 +422,65 @@ function LinkDialog({ user, data, onClose, onSaved }: { user: UserView | null; d
           </div>
         )}
         <DialogActions busy={busy} submitLabel="حفظ الإسناد" onSubmit={save} onClose={onClose} testId="link-save" />
+      </div>
+    </Modal>
+  );
+}
+
+/** تغيير كلمة المرور: يكتبها الأدمن أو تُنشأ عشوائيًا */
+function SetPasswordDialog({ user, onClose, onDone }: { user: UserView | null; onClose: () => void; onDone: (res: { username: string; password: string }) => void }) {
+  const [mode, setMode] = useState<'random' | 'manual'>('random');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [openedFor, setOpenedFor] = useState<UserView | null>(null);
+  if (user && user !== openedFor) {
+    setOpenedFor(user);
+    setMode('random');
+    setPassword('');
+    setError('');
+  } else if (!user && openedFor) {
+    setOpenedFor(null);
+  }
+
+  async function submit() {
+    if (!user) return;
+    if (mode === 'manual' && (password.length < 8 || /\s/.test(password))) {
+      setError('كلمة المرور 8 أحرف على الأقل وبلا مسافات.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await api<{ username: string; password: string }>(`/api/admin/users/${user.id}/password`, {
+        method: 'POST',
+        body: mode === 'manual' ? { password } : {},
+      });
+      onDone(res);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : 'تعذّر تغيير كلمة المرور.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={Boolean(user)} onClose={onClose} title={`كلمة المرور: ${user?.fullName ?? ''}`} subtitle="تتوقف كلمة المرور الحالية فور الحفظ، ويُفك أي قفل دخول." width={440}>
+      <div className="flex flex-col gap-3" data-testid="set-password-dialog">
+        <label className="flex items-center gap-2 text-[14px]">
+          <input type="radio" name="pw-mode" checked={mode === 'random'} onChange={() => setMode('random')} className="h-4 w-4 accent-[#55957A]" />
+          كلمة مرور عشوائية قوية (موصى به)
+        </label>
+        <label className="flex items-center gap-2 text-[14px]">
+          <input type="radio" name="pw-mode" checked={mode === 'manual'} onChange={() => setMode('manual')} className="h-4 w-4 accent-[#55957A]" data-testid="pw-manual" />
+          أكتب كلمة المرور بنفسي
+        </label>
+        {mode === 'manual' && (
+          <Field label="كلمة المرور الجديدة" error={error} hint="8 أحرف على الأقل، والحروف الكبيرة والصغيرة تفرق.">
+            <input dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={72} autoComplete="new-password" className={`${INPUT} text-left`} data-testid="pw-input" />
+          </Field>
+        )}
+        {mode === 'random' && error && <div className="text-[12.5px] text-err-ink">{error}</div>}
+        <DialogActions busy={busy} submitLabel="حفظ كلمة المرور" onSubmit={submit} onClose={onClose} testId="pw-save" />
       </div>
     </Modal>
   );

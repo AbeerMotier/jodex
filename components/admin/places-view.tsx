@@ -405,6 +405,15 @@ function RestroomDialog({
         </label>
         {errors._ && <div className="rounded-[10px] bg-[#FCEDE7] px-3 py-2 text-[13px] text-err-ink">{errors._}</div>}
         <DialogActions busy={busy} submitLabel={isNew ? 'إضافة' : 'حفظ'} onSubmit={submit} onClose={onClose} testId="restroom-save" />
+        {target && target !== 'new' && (
+          <DeleteButton
+            label="حذف دورة المياه"
+            confirmText={`حذف دورة المياه ${code} نهائيًا مع رمز QR الخاص بها؟`}
+            path={`/api/admin/restrooms/${target.id}`}
+            onDeleted={() => onSaved(false)}
+            onError={(m) => setErrors({ _: m })}
+          />
+        )}
       </div>
     </Modal>
   );
@@ -449,7 +458,46 @@ function BuildingDialog({ target, onClose, onSaved }: { target: Building | 'new'
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} placeholder="المبنى رقم 9" className={INPUT} data-testid="building-name" />
         </Field>
         <DialogActions busy={busy} submitLabel={isNew ? 'إضافة' : 'حفظ'} onSubmit={submit} onClose={onClose} testId="building-save" />
+        {target && target !== 'new' && (
+          <DeleteButton
+            label="حذف المبنى"
+            confirmText={`حذف «${name}»؟ يجب أن يكون المبنى بلا دورات مياه.`}
+            path={`/api/admin/buildings/${target.id}`}
+            onDeleted={onSaved}
+            onError={setError}
+          />
+        )}
       </div>
     </Modal>
+  );
+}
+
+function DeleteButton({ label, confirmText, path, onDeleted, onError }: { label: string; confirmText: string; path: string; onDeleted: () => void; onError: (m: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="-mt-1 border-t border-divider pt-3 pb-3">
+      <button
+        type="button"
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-err-ink underline-offset-2 hover:underline disabled:opacity-60"
+        data-testid="delete-button"
+        onClick={async () => {
+          if (!window.confirm(confirmText)) return;
+          setBusy(true);
+          try {
+            await api(path, { method: 'DELETE' });
+            onDeleted();
+          } catch (e) {
+            onError(errorText(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy && <Spinner size={12} />}
+        {label}
+      </button>
+      <div className="mt-1 text-[12px] text-muted">الحذف متاح لما لا سجل له؛ ما له جولات أو تقييمات يُعطَّل بدلًا من حذفه.</div>
+    </div>
   );
 }

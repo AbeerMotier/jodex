@@ -152,6 +152,7 @@ export const settingsItemSchema = z.object({
   group: z.enum(['contractor', 'deep', 'supervisor'], 'اختر مجموعة البند.'),
   title: z.string('أدخل اسم البند.').trim().min(2, 'اسم البند قصير جدًا.').max(200, 'اسم البند طويل جدًا.'),
   description: z.string().trim().max(500, 'الوصف طويل جدًا.').nullable().optional(),
+  category: z.string().trim().max(60, 'اسم المجال طويل جدًا (60 حرفًا كحد أقصى).').nullable().optional(),
   weight: z.number('أدخل وزنًا رقميًا.').min(0, 'الوزن بين 0 و100.').max(100, 'الوزن بين 0 و100.').nullable().optional(),
   isActive: z.boolean(),
   delete: z.boolean().optional(),
@@ -207,6 +208,11 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
 export const USERNAME_PATTERN = /^[a-z0-9._-]{2,32}$/;
 export const RESTROOM_CODE_PATTERN = /^[A-Z0-9-]{2,40}$/;
 
+export const usernameField = z
+  .string('أدخل اسم المستخدم.')
+  .trim()
+  .toLowerCase()
+  .regex(USERNAME_PATTERN, 'اسم المستخدم: من 2 إلى 32 حرفًا إنجليزيًا صغيرًا أو رقمًا أو . _ -');
 const fullNameField = z.string('أدخل الاسم.').trim().min(2, 'الاسم قصير جدًا.').max(120, 'الاسم طويل جدًا (120 حرفًا كحد أقصى).');
 const roleField = z.enum(['admin', 'supervisor', 'contractor_monitor'], 'اختر الدور.');
 const monitorKindField = z.enum(['primary', 'substitute'], 'اختر نوع المراقب.').nullable();
@@ -228,11 +234,7 @@ function refineMonitorShape(
 
 export const userCreateSchema = z
   .object({
-    username: z
-      .string('أدخل اسم المستخدم.')
-      .trim()
-      .toLowerCase()
-      .regex(USERNAME_PATTERN, 'اسم المستخدم: من 2 إلى 32 حرفًا إنجليزيًا صغيرًا أو رقمًا أو . _ -'),
+    username: usernameField,
     fullName: fullNameField,
     role: roleField,
     monitorKind: monitorKindField.default(null),
@@ -243,6 +245,7 @@ export type UserCreateInput = z.infer<typeof userCreateSchema>;
 
 export const userUpdateSchema = z
   .object({
+    username: usernameField.optional(),
     fullName: fullNameField.optional(),
     role: roleField.optional(),
     monitorKind: monitorKindField.optional(),
@@ -251,6 +254,16 @@ export const userUpdateSchema = z
   })
   .superRefine(refineMonitorShape);
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
+
+/** كلمة مرور يحددها الأدمن (اختيارية — بدونها تُنشأ كلمة عشوائية قوية) */
+export const passwordSetSchema = z.object({
+  password: z
+    .string()
+    .min(8, 'كلمة المرور 8 أحرف على الأقل.')
+    .max(72, 'كلمة المرور طويلة جدًا.')
+    .refine((v) => !/\s/.test(v), 'كلمة المرور بلا مسافات.')
+    .optional(),
+});
 
 export const restroomIdsSchema = z.object({
   restroomIds: z.array(idField('دورة مياه غير صالحة.')).max(1000, 'عدد دورات المياه كبير جدًا.'),

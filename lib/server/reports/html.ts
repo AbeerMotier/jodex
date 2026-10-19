@@ -41,8 +41,8 @@ const TONE: Record<string, [string, string]> = {
   warning: ['#FBF4E1', '#94711C'],
   error: ['#FCEDE7', '#B5512F'],
   neutral: ['#EAF3EC', '#44665A'],
-  monitor: ['#E4EEF8', '#1F5F99'],
-  supervisor: ['#F8E4E4', '#A12B2B'],
+  monitor: ['#E4EEEA', '#2F4F44'],
+  supervisor: ['#E0EEE6', '#2F4F44'],
 };
 
 export function chip(text: string, tone: string): { html: string } {

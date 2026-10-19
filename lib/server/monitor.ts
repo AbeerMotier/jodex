@@ -216,6 +216,10 @@ export async function loadMonitorToday(user: SessionUser, now: Date, requestedRe
     onBehalfOf: scope.isSubstitute ? scope.primaryName : null,
     restroom: { id: room.id, name: room.name, code: room.code, floor: room.floor_label, building: building.name },
     restrooms: roomSummaries,
+    notice:
+      requestedRestroomId && !rooms.some((r) => r.id === requestedRestroomId)
+        ? 'دورة المياه التي مسحت رمزها ليست ضمن دوراتك؛ عُرضت أول دورة مسندة إليك.'
+        : null,
     badge: { state: badge, ...BADGE_STATUS[badge] },
     defaultShift: defaultShift(minute, list),
     deep: {

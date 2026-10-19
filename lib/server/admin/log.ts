@@ -1,11 +1,12 @@
 import 'server-only';
-import { ANSWER_LABEL, DISPLAY_STATUS, PHOTO_SLOT_LABEL, PHOTO_SLOTS, RATING_LABEL, SHIFT_LABEL, type PhotoSlot } from '@/lib/domain/catalog';
+import { ANSWER_LABEL, DISPLAY_STATUS, PHOTO_SLOT_LABEL, PHOTO_SLOTS, RATING_LABEL, SHIFT_LABEL, type PhotoSlot, type Tone } from '@/lib/domain/catalog';
 import type { Rating } from '@/lib/domain/scoring';
 import { instantDate } from '@/lib/domain/format';
 import type { MetricEvaluation, MetricRound } from '@/lib/domain/metrics';
 import { answerFactor, type Answer } from '@/lib/domain/scoring';
 import { minutesToHHMM, riyadhMinuteOfDay } from '@/lib/domain/time';
 import { roundDisplayStatus, SHIFT_PLAN, type Shift } from '@/lib/domain/schedule';
+import { categorySubtotals, ratingStatus, visitClassification } from '@/lib/domain/visit';
 import { ApiError } from '../http';
 import { namesById } from '../people';
 import { signPhotoUrls } from '../photos';
@@ -129,7 +130,7 @@ export async function listLog(q: LogQuery, now: Date): Promise<{ rows: EntryView
 
 interface Snapshot {
   partial_credit_pct?: number;
-  items?: { id: string; title: string; weight: number }[];
+  items?: { id: string; title: string; weight: number; category?: string | null }[];
   deep_items?: { id: string; title: string }[];
   plan?: { start: string; fullUntil: string; nonFrom: string; deadline: string };
 }
@@ -230,6 +231,20 @@ export async function logDetails(kind: string, id: string, now: Date) {
     const rate = new Map((ratings ?? []).map((x) => [x.item_id, Number(x.rating)]));
     const urls = await signPhotoUrls((photos ?? []).map((p) => p.storage_key));
     const room = roomView(roomMap, e.restroom_id);
+    const rows = (snap.items ?? []).map((i) => {
+      const v = rate.get(i.id) ?? null;
+      const status = ratingStatus(v);
+      return {
+        title: i.title,
+        category: i.category ?? null,
+        answer: v,
+        answerLabel: v ? `${v} — ${RATING_LABEL[v as Rating]}` : '—',
+        statusLabel: status?.label ?? null,
+        tone: (status?.tone ?? 'neutral') as Tone,
+        weight: Number(i.weight),
+        points: v ? Math.round((v / 5) * Number(i.weight) * 100) / 100 : 0,
+      };
+    });
     return {
       kind: 'supervisor' as const,
       kicker: 'المشرف الميداني · تقييم عام مستقل للموقع',
@@ -245,18 +260,10 @@ export async function logDetails(kind: string, id: string, now: Date) {
         { k: 'يحتاج معالجة فورية', v: e.needs_urgent === 'yes' ? 'نعم' : 'لا', type: 'text' },
       ],
       answerHead: 'التقييم',
-      rows: (snap.items ?? []).map((i) => {
-        const v = rate.get(i.id) ?? null;
-        return {
-          title: i.title,
-          answer: v,
-          answerLabel: v ? `${v} — ${RATING_LABEL[v as Rating]}` : '—',
-          tone: v !== null && v <= 2 ? 'error' : 'neutral',
-          weight: Number(i.weight),
-          points: v ? Math.round((v / 5) * Number(i.weight) * 100) / 100 : 0,
-        };
-      }),
-      formula: 'المساهمة = (درجة المعيار ÷ 5) × وزن المعيار',
+      rows,
+      subtotals: categorySubtotals(rows),
+      classification: visitClassification(Number(e.score)),
+      formula: 'المساهمة = (درجة المعيار ÷ 5) × وزن المعيار · النتيجة النهائية = مجموع المساهمات',
       deepRows: [],
       photos: (photos ?? []).map((p, i) => ({ label: `صورة ${i + 1}`, url: urls[p.storage_key] ?? null })),
       note: e.note || 'لا توجد ملاحظات.',
