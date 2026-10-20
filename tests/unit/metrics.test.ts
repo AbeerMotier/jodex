@@ -169,8 +169,12 @@ describe('أداء المراقبين والمكافآت', () => {
     expect(classify(75, 70)).toBe('regular');
     expect(classify(74, 99)).toBe('needs_follow_up');
   });
-  it('المرشحون للمكافأة: cp ≥ 90 و q ≥ 85 مرتبون بـ cp+q، أعلى 3', () => {
+  it('المرشحون للمكافأة: أعلى 3 حسب الالتزام + تقييم المشرف، ومن ليس له تقييم مشرف لا يُرشَّح', () => {
     expect(bonusCandidates(perf).map((p) => p.monitorId)).toEqual(['m1', 'm3']);
+    const mk = (id: string, cp: number | null, s: number | null) => ({ monitorId: id, name: id, restroomIds: [], cp, a: null, s, q: null, completed: 0, required: 0, classification: null });
+    const many = [mk('a', 60, 70), mk('b', 99, 99), mk('c', 80, 90), mk('d', 70, 75), mk('e', 100, null)];
+    // بلا عتبات: الأعلى مجموعًا ولو كان أقل من 90/85، و«e» بلا تقييم مشرف مستبعد
+    expect(bonusCandidates(many).map((p) => p.monitorId)).toEqual(['b', 'c', 'd']);
   });
   it('لا مرشحين', () => {
     expect(bonusCandidates([])).toEqual([]);

@@ -1,8 +1,9 @@
 import 'server-only';
+import { restroomLabel } from '@/lib/domain/format';
 import { generatePassword, internalEmail } from '@/lib/accounts';
 import { ADMIN_SCOPE_LABEL, ROLE_LABEL, type AdminScope, type MonitorKind, type Role } from '@/lib/domain/catalog';
 import type { UserCreateInput, UserUpdateInput } from '@/lib/domain/validation';
-import type { SessionUser } from '../auth';
+import { isSuperAdmin, type SessionUser } from '../auth';
 import { audit } from '../audit';
 import { env } from '../env';
 import { ApiError } from '../http';
@@ -39,8 +40,12 @@ function dbError(message: string): ApiError {
   return new ApiError(500, 'server_error', 'تعذّر حفظ التعديل. حاول مرة أخرى.');
 }
 
+/** حساب الأدمن الرئيسي مخفي تمامًا عن غير الأدمن الرئيسي (لا يظهر ولا يُعدَّل ولا يُعرف وجوده) */
+const hiddenFrom = (actor: SessionUser, u: { role: Role; admin_scope: AdminScope | 'full' }) =>
+  u.role === 'admin' && (u.admin_scope === 'super' || u.admin_scope === 'full') && !isSuperAdmin(actor);
+
 /** كل المستخدمين مع ما يخص كل دور (دورات المراقب، مواقع المشرف، من ينوب عنه النائب) */
-export async function listUsers() {
+export async function listUsers(actor: SessionUser) {
   const svc = createServiceClient();
   const [{ data: users, error }, { data: rooms }, { data: assigns }, { data: buildings }, { data: contractorAssigns }] = await Promise.all([
     svc
@@ -54,7 +59,7 @@ export async function listUsers() {
     svc.from('contractor_assignments').select('contractor_id, restroom_id'),
   ]);
   if (error) throw new Error(error.message);
-  const list = (users ?? []) as UserRow[];
+  const list = ((users ?? []) as UserRow[]).filter((u) => !hiddenFrom(actor, u));
   const nameOf = new Map(list.map((u) => [u.id, u.full_name]));
   const roomsOf = new Map<string, string[]>();
   for (const r of rooms ?? []) if (r.monitor_id) roomsOf.set(r.monitor_id, [...(roomsOf.get(r.monitor_id) ?? []), r.id]);
@@ -87,7 +92,7 @@ export async function listUsers() {
     restrooms: (rooms ?? []).map((r) => ({
       id: r.id as string,
       code: r.code as string,
-      name: r.name as string,
+      name: restroomLabel(r.name as string),
       floor: r.floor_label as string,
       buildingId: r.building_id as string,
       monitorId: (r.monitor_id as string | null) ?? null,
@@ -96,15 +101,20 @@ export async function listUsers() {
   };
 }
 
-async function loadUser(id: string): Promise<UserRow> {
+async function loadUser(id: string, actor?: SessionUser): Promise<UserRow> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new ApiError(404, 'user_not_found', 'المستخدم غير موجود.');
   const { data } = await createServiceClient()
     .from('users')
     .select('id, username, full_name, role, monitor_kind, substitute_for_id, is_active, admin_scope, created_at')
     .eq('id', id)
     .maybeSingle();
-  if (!data) throw new ApiError(404, 'user_not_found', 'المستخدم غير موجود.');
+  if (!data || (actor && hiddenFrom(actor, data as UserRow))) throw new ApiError(404, 'user_not_found', 'المستخدم غير موجود.');
   return data as UserRow;
+}
+
+/** لا يمنح صلاحية الأدمن الرئيسي إلا أدمن رئيسي */
+function assertScopeAllowed(actor: SessionUser, scope: AdminScope | undefined) {
+  if (scope === 'super' && !isSuperAdmin(actor)) throw new ApiError(403, 'forbidden', 'لا تملك صلاحية منح هذا المستوى.', { adminScope: 'اختر مستوى صلاحية متاحًا.' });
 }
 
 async function assertPrimary(id: string) {
@@ -116,6 +126,7 @@ async function assertPrimary(id: string) {
 
 /** إنشاء حساب: كلمة مرور عشوائية تُعرض للأدمن مرة واحدة */
 export async function createUser(actor: SessionUser, input: UserCreateInput) {
+  if (input.role === 'admin') assertScopeAllowed(actor, input.adminScope);
   const svc = createServiceClient();
   const { data: taken } = await svc.from('users').select('id').eq('username', input.username).maybeSingle();
   if (taken) throw new ApiError(409, 'username_taken', 'اسم المستخدم مستخدم مسبقًا.', { username: 'اسم المستخدم مستخدم مسبقًا.' });
@@ -142,7 +153,7 @@ export async function createUser(actor: SessionUser, input: UserCreateInput) {
     role: input.role,
     monitor_kind: kind,
     substitute_for_id: substituteFor,
-    admin_scope: input.role === 'admin' ? input.adminScope : 'full',
+    admin_scope: input.role === 'admin' ? input.adminScope : 'restricted',
   });
   if (error) {
     await svc.auth.admin.deleteUser(created.user.id);
@@ -159,9 +170,10 @@ export async function createUser(actor: SessionUser, input: UserCreateInput) {
 
 /** تعديل الاسم أو الدور أو نوع المراقب أو التفعيل */
 export async function updateUser(actor: SessionUser, id: string, input: UserUpdateInput) {
-  const user = await loadUser(id);
+  const user = await loadUser(id, actor);
   const svc = createServiceClient();
-  if (user.id === actor.id && (input.isActive === false || (input.role && input.role !== 'admin') || input.adminScope === 'limited')) {
+  assertScopeAllowed(actor, input.adminScope);
+  if (user.id === actor.id && (input.isActive === false || (input.role && input.role !== 'admin') || (input.adminScope && input.adminScope !== user.admin_scope))) {
     throw new ApiError(409, 'self_lockout', 'لا يمكنك تعطيل حسابك أو تغيير دورك أو صلاحياتك بنفسك.');
   }
 
@@ -190,7 +202,7 @@ export async function updateUser(actor: SessionUser, id: string, input: UserUpda
     monitor_kind: kind,
     substitute_for_id: substituteFor,
     is_active: input.isActive ?? user.is_active,
-    admin_scope: role === 'admin' ? input.adminScope ?? user.admin_scope : ('full' as AdminScope),
+    admin_scope: role === 'admin' ? input.adminScope ?? user.admin_scope : ('restricted' as AdminScope),
   };
   const { error } = await svc.from('users').update(patch).eq('id', user.id);
   if (error) throw dbError(error.message);
@@ -228,7 +240,7 @@ export async function updateUser(actor: SessionUser, id: string, input: UserUpda
 
 /** كلمة مرور جديدة (يكتبها الأدمن أو عشوائية) تُعرض له مرة واحدة، ويُفك أي قفل دخول */
 export async function resetUserPassword(actor: SessionUser, id: string, chosen?: string) {
-  const user = await loadUser(id);
+  const user = await loadUser(id, actor);
   const svc = createServiceClient();
   const password = chosen ?? generatePassword(12);
   const { error } = await svc.auth.admin.updateUserById(user.id, { password, ...(user.is_active ? { ban_duration: 'none' } : {}) });
@@ -247,7 +259,7 @@ export async function resetUserPassword(actor: SessionUser, id: string, chosen?:
  * المشرف الميداني = المواقع التي يقيّمها، المقاول = دورات المياه المسندة إليه (عرض فقط).
  */
 export async function setUserRestrooms(actor: SessionUser, id: string, restroomIds: string[]) {
-  const user = await loadUser(id);
+  const user = await loadUser(id, actor);
   const svc = createServiceClient();
   const ids = [...new Set(restroomIds)];
   if (ids.length) {

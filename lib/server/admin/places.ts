@@ -1,4 +1,5 @@
 import 'server-only';
+import { restroomLabel } from '@/lib/domain/format';
 import { newQrToken } from '@/lib/accounts';
 import type { RestroomInput } from '@/lib/domain/validation';
 import type { SessionUser } from '../auth';
@@ -39,6 +40,7 @@ export async function listPlaces() {
       id: r.id as string,
       code: r.code as string,
       name: r.name as string,
+      label: restroomLabel(r.name as string),
       floor: r.floor_label as string,
       buildingId: r.building_id as string,
       monitorId: (r.monitor_id as string | null) ?? null,

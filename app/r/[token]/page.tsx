@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { InvalidToken } from '@/components/public/invalid-token';
 import { RateExperience } from '@/components/public/rate-experience';
 import { getSessionUser } from '@/lib/server/auth';
@@ -32,6 +33,8 @@ export default async function RatePage({ params }: { params: Promise<{ token: st
   const now = await serverNow();
   // من قيّم دورة المياه نفسها خلال 24 ساعة يرى رسالة المنع بدل النموذج (والخادم يرفض الإرسال أيضًا)
   const [h, c, user] = await Promise.all([headers(), cookies(), getSessionUser().catch(() => null)]);
+  // المشرف الميداني أو المراقب المسجّل يمسح الرمز بكاميرا الجوال ← صفحة دوره على دورة المياه نفسها مباشرة
+  if (user && (user.role === 'supervisor' || user.role === 'contractor_monitor')) redirect(`/go/${encodeURIComponent(info.code)}`);
   const identity = feedbackIdentity({ userId: user?.id ?? null, deviceId: c.get('jodex_device')?.value, ip: requestIp(h), userAgent: h.get('user-agent') ?? '' });
   const retry = await feedbackRetryAfter(identity.all, info.restroomId, now);
   return (

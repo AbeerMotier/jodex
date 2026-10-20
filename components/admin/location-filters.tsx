@@ -46,7 +46,7 @@ export function LocationFilters({
           value={restroom}
           testId="filter-restroom"
           onChange={(v) => onChange({ restroom: v || null })}
-          options={restrooms.map((r) => ({ value: r.id, label: `${r.name} · ${r.floor}${building ? '' : ` · ${r.building}`}` }))}
+          options={restrooms.map((r) => ({ value: r.id, label: `${r.code} · ${r.floor}${building ? '' : ` · ${r.building}`}` }))}
           placeholder="كل دورات المياه"
         />
       )}

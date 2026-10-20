@@ -241,7 +241,8 @@ export function monitorPerformance(
     const cp = average(mine.filter(isDue).map((r) => r.compliance_score));
     const a = contractorAverage(mine);
     const rooms = new Set(m.restroom_ids);
-    // «جولة المراقب غير مطابقة للواقع» لا تدخل في أداء المتميزين ولا تخفض تقييمهم
+    // تقييم المشرف للمتميزين: فقط ما أجاب فيه المشرف بأن جولة المراقب مطابقة للواقع
+    // («غير مطابقة» لا تدخل ولا تخفض التقييم)
     const s = supervisorAverage(evaluations.filter((e) => rooms.has(e.restroom_id) && e.matches_round !== 'no'));
     const q = mode === 'contractor' ? a : average([a, s]);
     return {
@@ -275,17 +276,14 @@ export function topByQuality(perf: MonitorPerformance[], n: number): MonitorPerf
 
 export const BONUS_TOP_N = 3;
 
-/** المرشحون للمكافأة: cp ≥ 90 و q ≥ 85، مرتبون تنازليًا بـ (cp + q)، أعلى 3 فقط */
+/**
+ * المرشحون للمكافأة: أعلى 3 حسب (الالتزام cp + تقييم المشرف s)، وتقييم المشرف يشمل فقط التقييمات
+ * التي أجاب فيها المشرف بأن جولة المراقب مطابقة للواقع. يلزم توفر القيمتين.
+ */
 export function bonusCandidates(perf: MonitorPerformance[]): MonitorPerformance[] {
   return perf
-    .filter(
-      (p) =>
-        p.cp !== null &&
-        p.q !== null &&
-        p.cp >= CLASSIFICATION_THRESHOLDS.excellent.cp &&
-        p.q >= CLASSIFICATION_THRESHOLDS.excellent.q,
-    )
-    .sort((x, y) => (y.cp! + y.q!) - (x.cp! + x.q!) || x.name.localeCompare(y.name, 'ar'))
+    .filter((p) => p.cp !== null && p.s !== null)
+    .sort((x, y) => (y.cp! + y.s!) - (x.cp! + x.s!) || (y.cp! - x.cp!) || x.name.localeCompare(y.name, 'ar'))
     .slice(0, BONUS_TOP_N);
 }
 

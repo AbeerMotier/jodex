@@ -45,13 +45,16 @@ export function ContractorView({ name, data }: { name: string; data: ContractorD
       {data.restrooms.length === 0 ? (
         <Card className="p-6 text-center text-[14px] text-muted">لا توجد دورات مياه مسندة إليك حاليًا. راجع الأدمن.</Card>
       ) : (
-        <section className="min-w-0 rounded-[20px] border border-line bg-white py-2" data-testid="contractor-table" aria-label="دورات المياه المسندة (للعرض فقط)">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-2.5 pb-1">
-            <h2 className="m-0 text-[17px] font-bold">دورات المياه المسندة إليك</h2>
+        <details className="group min-w-0 rounded-[20px] border border-line bg-white py-2" data-testid="contractor-list">
+          <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-5 pt-2.5 pb-1" data-testid="contractor-toggle">
+            <h2 className="m-0 text-[17px] font-bold">
+              دورات المياه المسندة إليك ({data.restrooms.length}) <span className="text-[13px] font-normal text-muted group-open:hidden">— اضغط للعرض</span>
+            </h2>
             <Chip tone="neutral" size="sm">
-              للعرض فقط
+              للاطلاع فقط
             </Chip>
-          </div>
+          </summary>
+          <section className="min-w-0" data-testid="contractor-table" aria-label="دورات المياه المسندة (للاطلاع فقط)">
           <div className="overflow-x-auto">
             <div className="min-w-[980px]" role="table">
               <div className={`${GRID} px-5 py-3 text-[12px] font-semibold text-muted`} role="row">
@@ -88,7 +91,8 @@ export function ContractorView({ name, data }: { name: string; data: ContractorD
               ))}
             </div>
           </div>
-        </section>
+          </section>
+        </details>
       )}
     </main>
   );

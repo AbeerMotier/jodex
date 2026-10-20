@@ -1,8 +1,8 @@
 import { Decor } from '@/components/ui/decor';
 import { Logo } from '@/components/ui/logo';
 
-/** بطاقة رمز QR (نفس التصميم للعرض والطباعة): «دورة مياه» وتحتها الترميز، والرمز يحتوي الترميز فقط */
-export function QrCardFace({ svg, code, scanUrl, qrSize = 120 }: { svg: string; code: string; scanUrl: string; qrSize?: number }) {
+/** بطاقة رمز QR (نفس التصميم للعرض والطباعة): «دورة مياه» وتحتها الترميز فقط */
+export function QrCardFace({ svg, code, qrSize = 120 }: { svg: string; code: string; qrSize?: number }) {
   return (
     <>
       <div className="relative isolate flex w-full justify-center overflow-hidden bg-brand px-3 pt-4 pb-[46px]">
@@ -17,15 +17,11 @@ export function QrCardFace({ svg, code, scanUrl, qrSize = 120 }: { svg: string; 
         <div className="block p-[3px] [&>svg]:block [&>svg]:h-full [&>svg]:w-full" style={{ width: qrSize, height: qrSize }} dangerouslySetInnerHTML={{ __html: svg }} role="img" aria-label={`رمز QR لدورة المياه ${code}`} />
       </div>
       <div className="flex w-full flex-col items-center gap-2 px-4 pt-3 pb-1">
-        <span className="rounded-full bg-ok-bg px-3 py-[3px] text-[12px] font-semibold text-ok-ink">امسح لتقييم النظافة</span>
         <div>
           <div className="text-[14.5px] font-bold text-ink">دورة مياه</div>
           <div dir="ltr" className="tabular mt-0.5 text-[13px] font-bold text-ink" data-testid="qr-code-text">
             {code}
           </div>
-        </div>
-        <div className="max-w-full font-mono text-[11px] break-all text-muted" dir="ltr">
-          {scanUrl}
         </div>
       </div>
     </>

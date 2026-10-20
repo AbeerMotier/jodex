@@ -82,7 +82,7 @@ export async function createQaWorld(label = 'QA'): Promise<QaWorld> {
   await add('sub', { username: `qa${lower}.sub`, full_name: 'نائب الاختبار', role: 'contractor_monitor', monitor_kind: 'substitute', substitute_for_id: users.m1.id });
   await add('sup', { ...base, username: `qa${lower}.sup`, full_name: 'مشرف الاختبار', role: 'supervisor' });
   await add('sup2', { ...base, username: `qa${lower}.sup2`, full_name: 'مشرف الاختبار الثاني', role: 'supervisor' });
-  await add('lim', { ...base, username: `qa${lower}.lim`, full_name: 'أدمن محدود الاختبار', role: 'admin', admin_scope: 'limited' });
+  await add('lim', { ...base, username: `qa${lower}.lim`, full_name: 'أدمن محدود الاختبار', role: 'admin', admin_scope: 'viewer' });
   await add('con', { ...base, username: `qa${lower}.con`, full_name: 'مقاول الاختبار', role: 'contractor' });
 
   const assign = await svc.from('supervisor_assignments').insert([

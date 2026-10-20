@@ -86,8 +86,16 @@ export async function buildDashboard(user: SessionUser, q: CommonQuery, source: 
     compliance: showContractor ? compliance : null,
   };
 
+  // تفاصيل كل مؤشر عند الضغط: مراقب المقاول المسؤول، والمشرفون الذين قيّموا الموقع في الفترة
+  const evaluatorIds = new Map<string, Set<string>>();
+  for (const e of evaluations) evaluatorIds.set(e.restroom_id, (evaluatorIds.get(e.restroom_id) ?? new Set()).add(e.supervisor_id));
+  const monitorOf = new Map<string, string>();
+  for (const m of monitors) for (const id of m.restroom_ids) monitorOf.set(id, m.full_name);
+  const supNames = await namesById(evaluations.map((e) => e.supervisor_id));
   const comparison = comparisonSeries(scopedRooms, rounds, evaluations, feedback).map((p) => ({
     ...p,
+    monitor: monitorOf.get(p.restroomId) ?? null,
+    supervisors: [...(evaluatorIds.get(p.restroomId) ?? [])].map((id) => supNames[id]).filter(Boolean),
     contractor: showContractor ? p.contractor : null,
     supervisor: showSupervisor ? p.supervisor : null,
     satisfaction: source === 'beneficiary' ? p.satisfaction : null,

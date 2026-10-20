@@ -4,7 +4,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { z } from 'zod';
 import { fieldErrors } from '@/lib/domain/validation';
 import type { Role } from '@/lib/domain/catalog';
-import { getSessionUser, isFullAdmin, type SessionUser } from './auth';
+import { canManage, getSessionUser, isViewer, type SessionUser } from './auth';
 import { serverNow } from './clock';
 import { env } from './env';
 
@@ -135,7 +135,7 @@ export interface PublicRouteContextArgs<P> {
 type NextRouteContext<P> = { params: Promise<P> };
 
 export interface AuthedOptions {
-  /** للأدمن ذي الصلاحيات الكاملة فقط (المستخدمون والصلاحيات والمباني ودورات المياه والإعدادات والأوزان) */
+  /** للأدمن الذي يحق له التعديل فقط (الرئيسي والمقيّد) حتى في طلبات القراءة */
   fullAdmin?: boolean;
 }
 
@@ -151,7 +151,11 @@ export function authed<P = Record<string, string>>(
       const user = await getSessionUser();
       if (!user) throw new ApiError(401, 'unauthenticated', MSG.unauthenticated);
       if (!roles.includes(user.role)) throw new ApiError(403, 'forbidden', MSG.forbidden);
-      if (options.fullAdmin && !isFullAdmin(user)) throw new ApiError(403, 'forbidden', MSG.forbidden);
+      // الأدمن المطّلع: عرض فقط — كل طلب معدِّل مرفوض في كل نقاط النهاية
+      if (isViewer(user) && !['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
+        throw new ApiError(403, 'read_only', 'صلاحيتك للاطلاع فقط، ولا يمكنك التعديل أو الإضافة أو الحذف.');
+      }
+      if (options.fullAdmin && !canManage(user)) throw new ApiError(403, 'forbidden', MSG.forbidden);
       const params = (await context.params) ?? ({} as P);
       const now = await serverNow();
       const result = await handler({ req, user, params, now });
@@ -186,7 +190,10 @@ export function dbErrorCode(error: { message?: string; code?: string } | null | 
   return error.message ?? error.code ?? 'db_error';
 }
 
-/** نقطة نهاية للأدمن ذي الصلاحيات الكاملة فقط (الأدمن المحدود يحصل على 403) */
+/**
+ * نقاط إدارة المستخدمين والمباني ودورات المياه والإعدادات: القراءة لكل أدمن (المطّلع يرى ولا يعدّل)،
+ * والتعديل للرئيسي والمقيّد فقط (المطّلع يُرفض في authed لكل طلب معدِّل).
+ */
 export function fullAdminRoute<P = Record<string, string>>(handler: (ctx: RouteContextArgs<P>) => Promise<unknown>) {
-  return authed<P>(['admin'], handler, { fullAdmin: true });
+  return authed<P>(['admin'], handler);
 }

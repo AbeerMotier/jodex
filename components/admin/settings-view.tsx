@@ -13,6 +13,7 @@ import { EVALUATION_TYPE_LABEL, ITEM_GROUP_EVALUATION, ITEM_GROUP_SCORED, type I
 import { fmtNum } from '@/lib/domain/format';
 import { GROUP_SUM_MESSAGE, settingsItemSchema, type RecalcOption } from '@/lib/domain/validation';
 import { summarizeWeights } from '@/lib/domain/weights';
+import { useAdminAccess } from './admin-shell';
 import { PageHeader } from './page-header';
 
 interface ServerItem {
@@ -80,6 +81,7 @@ function toDraft(items: ServerItem[]): DraftItem[] {
 }
 
 export function SettingsView() {
+  const { canEdit } = useAdminAccess();
   const toast = useToast();
   const { data, loading, error, reload, setData } = useApi<SettingsData>('/api/admin/settings');
   const [items, setItems] = useState<DraftItem[]>([]);
@@ -195,12 +197,17 @@ export function SettingsView() {
     <>
       <PageHeader
         title="الإعدادات والأوزان"
+        sub={canEdit ? undefined : 'للاطلاع فقط — صلاحيتك لا تسمح بالتعديل'}
         actions={
-          <button type="button" onClick={() => setEditing('new')} data-testid="add-item" className="touch-target inline-flex items-center gap-1.5 rounded-[11px] bg-ink px-4 py-2.5 text-[14px] font-semibold text-white">
-            <IconPlus size={16} /> إضافة بند
-          </button>
+          canEdit ? (
+            <button type="button" onClick={() => setEditing('new')} data-testid="add-item" className="touch-target inline-flex items-center gap-1.5 rounded-[11px] bg-ink px-4 py-2.5 text-[14px] font-semibold text-white">
+              <IconPlus size={16} /> إضافة بند
+            </button>
+          ) : undefined
         }
       />
+      {/* المطّلع: كل الحقول والأزرار معطلة (والخادم يرفض أي حفظ) */}
+      <fieldset disabled={!canEdit} className="m-0 flex min-w-0 flex-col gap-[18px] border-0 p-0" data-testid="settings-form">
       <div className="animate-fade-up rounded-[14px] bg-mint-3 px-4 py-3 text-[13.5px] leading-[1.7]">
         <MixedText text="الأوزان تظهر للأدمن فقط. يجب أن يكون مجموع أوزان البنود الفعالة في كل مجموعة محتسبة 100%. مساهمة المعيار = (درجة المعيار ÷ 5) × وزن المعيار — مثال: وزن 18% وتقييم 5 = 18 نقطة، وتقييم 4 = 14.4 نقطة." />
       </div>
@@ -343,6 +350,9 @@ export function SettingsView() {
         </select>
       </section>
 
+      </fieldset>
+
+      {canEdit && (
       <div className="flex flex-wrap items-center gap-2.5">
         <button
           type="button"
@@ -362,6 +372,7 @@ export function SettingsView() {
         {!valid && <span className="text-[13px] text-err-ink">يجب أن يكون مجموع كل مجموعة 100% للحفظ.</span>}
         {valid && dirty && <span className="text-[13px] text-muted">لديك تغييرات غير محفوظة.</span>}
       </div>
+      )}
 
       <ItemDialog
         item={editing}

@@ -91,7 +91,7 @@ export interface TodayData {
   deep: { required: boolean; weekday: number };
   badge: { state: string; label: string };
   onBehalfOf: string | null;
-  restroom: { name: string };
+  restroom: { name: string; code: string };
   user: { name: string; isSubstitute: boolean };
 }
 

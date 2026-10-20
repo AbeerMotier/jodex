@@ -12,7 +12,7 @@ import { QrCardFace } from './qr-card';
 import { Toolbar } from './toolbar';
 
 interface QrData {
-  cards: { id: string; restroom: { code: string; name: string; floor: string; building: string }; url: string; content: string; scanUrl: string; svg: string }[];
+  cards: { id: string; restroom: { code: string; name: string; floor: string; building: string }; url: string; content: string; svg: string }[];
 }
 
 export function QrView() {
@@ -21,6 +21,18 @@ export function QrView() {
   const building = f.get('building');
   const { data, loading, error, reload } = useApi<QrData>(`/api/admin/qr${building ? `?building=${building}` : ''}`);
   const [printing, setPrinting] = useState<string | null>(null);
+
+  async function printAll() {
+    setPrinting('all');
+    try {
+      await download(`/api/admin/qr/print${building ? `?building=${building}` : ''}`, 'jodex-qr-all.pdf');
+      toast.show('تم تجهيز ملف طباعة كل الرموز');
+    } catch (e) {
+      toast.show(e instanceof ApiClientError ? e.message : 'تعذّر تجهيز ملف الطباعة.', 'error');
+    } finally {
+      setPrinting(null);
+    }
+  }
 
   async function print(id: string, code: string) {
     setPrinting(id);
@@ -38,12 +50,24 @@ export function QrView() {
     <>
       <PageHeader
         title="رموز QR"
-        sub="لكل دورة مياه رمز خاص بها يحتوي ترميزها فقط. يُمسح الرمز من صفحة المسح لتقييم النظافة دون تسجيل دخول."
+        sub="لكل دورة مياه رمز خاص بها: امسحه بكاميرا الجوال لتقييم نظافة دورة المياه مباشرة، دون تسجيل دخول."
         actions={
-          <Toolbar
-            filters={<LocationFilters building={building} floor="" restroom="" showFloor={false} showRestroom={false} onChange={(p) => f.set({ building: p.building })} />}
-            activeCount={building ? 1 : 0}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={printAll}
+              disabled={printing !== null || !data?.cards.length}
+              className="touch-target flex items-center gap-1.5 rounded-[11px] bg-ink px-4 py-2.5 text-[13.5px] font-semibold text-white disabled:opacity-60"
+              data-testid="qr-print-all"
+            >
+              {printing === 'all' && <Spinner size={14} />}
+              طباعة كل الرموز{data ? ` (${data.cards.length})` : ''}
+            </button>
+            <Toolbar
+              filters={<LocationFilters building={building} floor="" restroom="" showFloor={false} showRestroom={false} onChange={(p) => f.set({ building: p.building })} />}
+              activeCount={building ? 1 : 0}
+            />
+          </div>
         }
       />
       {error && (
@@ -59,10 +83,7 @@ export function QrView() {
         {data?.cards.length === 0 && <div className="text-[13.5px] text-muted">لا توجد رموز QR مطابقة.</div>}
         {data?.cards.map((q) => (
           <div key={q.id} className="relative flex flex-col items-center overflow-hidden rounded-[22px] border border-line bg-white pb-4 text-center shadow-[0_10px_26px_-18px_rgba(47,79,68,.4)]" data-testid="qr-card">
-            <QrCardFace svg={q.svg} code={q.restroom.code} scanUrl={q.scanUrl} />
-            <div className="mt-1 px-4 text-[12px] text-muted" data-testid="qr-location">
-              {q.restroom.name} · {q.restroom.floor} · {q.restroom.building}
-            </div>
+            <QrCardFace svg={q.svg} code={q.restroom.code} />
             <div className="mt-2 grid w-full grid-cols-2 gap-1.5 px-4">
               <a href={q.url} target="_blank" rel="noopener noreferrer" className="touch-target flex items-center justify-center rounded-[9px] bg-ink px-1.5 py-[9px] text-[12.5px] font-semibold text-white no-underline hover:text-white" data-testid="qr-open">
                 فتح صفحة التقييم

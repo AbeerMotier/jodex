@@ -1,11 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import { createContext, Suspense, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Decor } from '@/components/ui/decor';
 import { IconMenu } from '@/components/ui/icons';
 import { Logo } from '@/components/ui/logo';
 import { api } from '@/lib/client/api';
+import { ADMIN_SCOPE_SHORT, type AdminScope } from '@/lib/domain/catalog';
 import { isPeriod, useStoredPeriod } from './filters-context';
 
 const NAV = [
@@ -15,14 +16,27 @@ const NAV = [
   { href: '/admin/notes', label: 'الملاحظات والإجراءات', count: 'notes' },
   { href: '/admin/staff', label: 'أداء الموظفين المتميزين', count: 'staff' },
   { href: '/admin/qr', label: 'رموز QR', count: 'qr' },
-  { href: '/admin/users', label: 'المستخدمون والصلاحيات', count: null, fullOnly: true },
-  { href: '/admin/restrooms', label: 'المباني ودورات المياه', count: null, fullOnly: true },
-  { href: '/admin/settings', label: 'الإعدادات والأوزان', count: null, fullOnly: true },
+  { href: '/admin/users', label: 'المستخدمون والصلاحيات', count: null },
+  { href: '/admin/restrooms', label: 'المباني ودورات المياه', count: null },
+  { href: '/admin/settings', label: 'الإعدادات والأوزان', count: null },
 ] as const;
+
+interface AdminAccess {
+  scope: AdminScope;
+  /** الرئيسي والمقيّد يعدّلون؛ المطّلع للعرض فقط */
+  canEdit: boolean;
+  isSuper: boolean;
+}
+const AccessContext = createContext<AdminAccess>({ scope: 'super', canEdit: true, isSuper: true });
+
+/** صلاحية الأدمن الحالي في الواجهة (إخفاء أزرار التعديل للمطّلع؛ الخادم يرفض التعديل أيضًا) */
+export function useAdminAccess(): AdminAccess {
+  return useContext(AccessContext);
+}
 
 type Counts = Record<'log' | 'feedback' | 'notes' | 'staff' | 'qr', number>;
 
-function Sidebar({ adminName, fullAccess }: { adminName: string; fullAccess: boolean }) {
+function Sidebar({ adminName, scope }: { adminName: string; scope: AdminScope }) {
   const pathname = usePathname();
   const sp = useSearchParams();
   const storedPeriod = useStoredPeriod();
@@ -71,7 +85,7 @@ function Sidebar({ adminName, fullAccess }: { adminName: string; fullAccess: boo
         </button>
       </div>
       <nav id="admin-nav" className={`relative z-[1] flex-col gap-1 ${open ? 'flex' : 'hidden'} md:flex`} aria-label="لوحة التحكم">
-        {NAV.filter((n) => fullAccess || !('fullOnly' in n)).map((n) => {
+        {NAV.map((n) => {
           const active = n.href === '/admin' ? pathname === '/admin' : pathname.startsWith(n.href);
           const value = n.count && counts ? counts[n.count] : null;
           return (
@@ -98,7 +112,12 @@ function Sidebar({ adminName, fullAccess }: { adminName: string; fullAccess: boo
         })}
       </nav>
       <div className={`relative z-[1] mt-auto ${open ? 'flex' : 'hidden'} items-center justify-between gap-2 px-1 text-[12.5px] md:flex`}>
-        <span className="text-white">م. {adminName}</span>
+        <span className="flex flex-col text-white">
+          <span>م. {adminName}</span>
+          <span className="text-[11.5px] opacity-90" data-testid="admin-scope">
+            {ADMIN_SCOPE_SHORT[scope]}
+          </span>
+        </span>
         <button type="button" onClick={logout} className="border-0 bg-transparent text-[12.5px] font-semibold text-white underline underline-offset-[3px]" data-testid="logout">
           خروج
         </button>
@@ -108,13 +127,16 @@ function Sidebar({ adminName, fullAccess }: { adminName: string; fullAccess: boo
 }
 
 /** لوحة الأدمن: شريط جانبي أخضر يمين الشاشة ومحتوى مرن */
-export function AdminShell({ adminName, fullAccess = true, children }: { adminName: string; fullAccess?: boolean; children: ReactNode }) {
+export function AdminShell({ adminName, scope = 'super', children }: { adminName: string; scope?: AdminScope; children: ReactNode }) {
+  const access: AdminAccess = { scope, canEdit: scope !== 'viewer', isSuper: scope === 'super' };
   return (
-    <div className="flex min-h-dvh animate-[fadeIn_.3s_ease_both] flex-col md:flex-row">
-      <Suspense fallback={<aside className="bg-brand md:h-dvh md:w-[260px]" />}>
-        <Sidebar adminName={adminName} fullAccess={fullAccess} />
-      </Suspense>
-      <div className="flex min-w-0 flex-1 flex-col gap-[18px] px-4 pt-[22px] pb-[60px] md:px-[22px]">{children}</div>
-    </div>
+    <AccessContext.Provider value={access}>
+      <div className="flex min-h-dvh animate-[fadeIn_.3s_ease_both] flex-col md:flex-row">
+        <Suspense fallback={<aside className="bg-brand md:h-dvh md:w-[260px]" />}>
+          <Sidebar adminName={adminName} scope={scope} />
+        </Suspense>
+        <div className="flex min-w-0 flex-1 flex-col gap-[18px] px-4 pt-[22px] pb-[60px] md:px-[22px]">{children}</div>
+      </div>
+    </AccessContext.Provider>
   );
 }

@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/toast';
 import { api, ApiClientError } from '@/lib/client/api';
 import { useApi } from '@/lib/client/use-api';
 import { buildingSchema, restroomSchema } from '@/lib/domain/validation';
+import { useAdminAccess } from './admin-shell';
 import { BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, DialogActions, Field, INPUT } from './manage-ui';
 import { PageHeader } from './page-header';
 
@@ -21,6 +22,8 @@ interface Room {
   id: string;
   code: string;
   name: string;
+  /** الاسم المعروض («دورة مياه»)؛ الاسم المخزّن يظهر في نافذة التعديل فقط */
+  label?: string;
   floor: string;
   buildingId: string;
   monitorId: string | null;
@@ -45,6 +48,7 @@ const errorText = (e: unknown) => (e instanceof ApiClientError ? e.message : 'ت
 
 export function PlacesView() {
   const toast = useToast();
+  const { canEdit } = useAdminAccess();
   const { data, error, loading, reload } = useApi<PlacesData>('/api/admin/restrooms');
   const [buildingFilter, setBuildingFilter] = useState('');
   const [q, setQ] = useState('');
@@ -87,8 +91,9 @@ export function PlacesView() {
     <>
       <PageHeader
         title="المباني ودورات المياه"
-        sub="الترميز والمبنى والدور، والمراقب المسؤول عن كل دورة مياه"
+        sub={canEdit ? 'الترميز والمبنى والدور، والمراقب المسؤول عن كل دورة مياه' : 'للاطلاع فقط — صلاحيتك لا تسمح بالتعديل أو الإضافة أو الحذف'}
         actions={
+          canEdit && (
           <div className="flex flex-wrap gap-2">
             <button type="button" className={BTN_SECONDARY} onClick={() => setEditingBuilding('new')} data-testid="building-add">
               <IconPlus size={16} /> إضافة مبنى
@@ -97,6 +102,7 @@ export function PlacesView() {
               <IconPlus size={16} /> إضافة دورة مياه
             </button>
           </div>
+          )
         }
       />
 
@@ -133,6 +139,7 @@ export function PlacesView() {
       {groups.map(({ building, rooms }) => (
         <BuildingSection
           key={building.id}
+          readOnly={!canEdit}
           building={building}
           rooms={rooms}
           monitors={activeMonitors}
@@ -178,7 +185,9 @@ function BuildingSection({
   onRename,
   onEditRoom,
   onAssign,
+  readOnly,
 }: {
+  readOnly: boolean;
   building: Building;
   rooms: Room[];
   monitors: Monitor[];
@@ -193,6 +202,7 @@ function BuildingSection({
 
   return (
     <section className="animate-fade-up overflow-hidden rounded-[18px] border border-line bg-white" data-testid={`building-${building.name}`}>
+      <fieldset disabled={readOnly} className="m-0 min-w-0 border-0 p-0">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-divider bg-[#F6F9F7] px-[18px] py-3">
         <div className="flex flex-col">
           <span className="flex items-center gap-2 text-[16px] font-bold text-ink">
@@ -254,7 +264,7 @@ function BuildingSection({
                 {r.code}
               </span>
               <span className="flex min-w-0 flex-col">
-                <span className="font-semibold text-ink">{r.name}</span>
+                <span className="font-semibold text-ink">{r.label ?? r.name}</span>
                 <span className="text-[12px] text-muted">{r.floor}</span>
               </span>
               <span className="flex items-center gap-1.5">
@@ -292,6 +302,7 @@ function BuildingSection({
           ))}
         </div>
       </div>
+      </fieldset>
     </section>
   );
 }

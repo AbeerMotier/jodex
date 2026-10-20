@@ -63,3 +63,17 @@ export function scoreColor(value: number | null | undefined): string {
 export function initial(name: string): string {
   return name.trim().charAt(0) || '؟';
 }
+
+/**
+ * اسم دورة المياه المعروض في كل الموقع: «دورة مياه» بلا رقم ولا «رجال/نساء» (طلب الجهة)،
+ * والتمييز بينها بالترميز. الاسم المخزّن يبقى كما هو ويظهر فقط في صفحة إدارة دورات المياه.
+ */
+export function restroomLabel(name: string | null | undefined): string {
+  if (!name) return 'دورة مياه';
+  const short = name
+    .replace(/\s*رقم\s*[0-9٠-٩]+/g, '')
+    .replace(/\s*(رجال|نساء|للرجال|للنساء)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return /^دورة\s+مياه/.test(short) || !short ? 'دورة مياه' : short;
+}

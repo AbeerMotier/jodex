@@ -1,4 +1,5 @@
 import 'server-only';
+import { restroomLabel } from '@/lib/domain/format';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isSource, type Source } from '@/lib/domain/catalog';
 import type { FeedbackCount, MetricEvaluation, MetricRound, MonitorRef, RestroomRef } from '@/lib/domain/metrics';
@@ -65,7 +66,7 @@ export async function loadRestroomRefs(client: SupabaseClient, options: { includ
   const bname = new Map((buildings ?? []).map((b) => [b.id, b.name]));
   return (rooms ?? [])
     .filter((r) => options.includeInactive || r.is_active)
-    .map((r) => ({ ...r, building_name: bname.get(r.building_id) ?? '' }));
+    .map((r) => ({ ...r, name: restroomLabel(r.name), building_name: bname.get(r.building_id) ?? '' }));
 }
 
 /** دورات المياه المطابقة لفلاتر الموقع (undefined = بلا تقييد) */

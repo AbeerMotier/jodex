@@ -61,6 +61,7 @@ export async function staffReport(q: StaffQuery, now: Date) {
       name: p.name,
       rank,
       cp: p.cp,
+      s: p.s,
       q: p.q,
       restroom: areaView(roomMap, p.restroomIds),
       approved: approvals.has(p.monitorId),

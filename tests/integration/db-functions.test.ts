@@ -225,14 +225,14 @@ describe('save_settings_tx', () => {
     expect(res.error?.message).toBe('forbidden');
   });
 
-  it('الأدمن المحدود لا يحفظ الإعدادات والأوزان (تحقق قاعدة البيانات)', async () => {
+  it('الأدمن المطّلع لا يحفظ الإعدادات والأوزان (تحقق قاعدة البيانات)', async () => {
     const db = svc();
-    await db.from('users').update({ admin_scope: 'limited' }).eq('id', world.users.admin.id);
+    await db.from('users').update({ admin_scope: 'viewer' }).eq('id', world.users.admin.id);
     try {
       const res = await db.rpc('save_settings_tx', { p_actor: world.users.admin.id, p_payload: { partial_credit_pct: 50, deep_clean_weekday: 1, items: [] } });
       expect(res.error?.message).toBe('forbidden');
     } finally {
-      await db.from('users').update({ admin_scope: 'full' }).eq('id', world.users.admin.id);
+      await db.from('users').update({ admin_scope: 'super' }).eq('id', world.users.admin.id);
     }
   });
 });

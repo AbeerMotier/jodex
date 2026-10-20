@@ -81,7 +81,7 @@ test('النطاق: المراقب لا يصل إلى جولات دورة أخر
 
     // النائب يعمل على دورة المراقب الذي ينوب عنه فقط
     const subToday = await monitorToday(sessions.sub);
-    expect(subToday.restroom.name).toBe(w.rooms.a.name);
+    expect(subToday.restroom.code).toBe(w.rooms.a.code);
     expect(subToday.onBehalfOf).toBe(w.users.m1.name);
 
     for (const [api, room] of [

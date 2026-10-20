@@ -35,13 +35,30 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     role: profile.role,
     monitorKind: profile.monitor_kind,
     substituteForId: profile.substitute_for_id,
-    adminScope: profile.admin_scope === 'limited' ? 'limited' : 'full',
+    adminScope: adminScopeOf(profile.admin_scope),
   };
 });
 
-/** الأدمن بصلاحيات كاملة (المستخدمون والصلاحيات والمباني ودورات المياه والإعدادات والأوزان) */
-export function isFullAdmin(user: SessionUser | null): boolean {
-  return user?.role === 'admin' && user.adminScope === 'full';
+/** مستوى الأدمن من قاعدة البيانات (مع القيم السابقة: full ← super، limited ← viewer) */
+function adminScopeOf(value: string | null): AdminScope {
+  if (value === 'super' || value === 'full') return 'super';
+  if (value === 'viewer' || value === 'limited') return 'viewer';
+  return 'restricted';
+}
+
+/** أدمن يحق له التعديل والإضافة والحذف (الرئيسي والمقيّد؛ المطّلع للعرض فقط) */
+export function canManage(user: SessionUser | null): boolean {
+  return user?.role === 'admin' && (user.adminScope === 'super' || user.adminScope === 'restricted');
+}
+
+/** الأدمن الرئيسي: الوحيد الذي يرى حسابات الأدمن الرئيسي ويديرها */
+export function isSuperAdmin(user: SessionUser | null): boolean {
+  return user?.role === 'admin' && user.adminScope === 'super';
+}
+
+/** الأدمن المطّلع: عرض فقط */
+export function isViewer(user: SessionUser | null): boolean {
+  return user?.role === 'admin' && user.adminScope === 'viewer';
 }
 
 export function firstName(fullName: string): string {

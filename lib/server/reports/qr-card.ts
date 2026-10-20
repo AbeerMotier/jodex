@@ -2,19 +2,30 @@ import 'server-only';
 import { esc } from './html';
 import { embeddedFontCss } from './pdf';
 
+export interface PrintCard {
+  svg: string;
+  code: string;
+}
+
+/** بطاقة QR واحدة للطباعة (A5 عمودي) */
+export function qrCardDocument(card: PrintCard): Promise<string> {
+  return qrCardsDocument([card], `${card.code} — رمز QR`);
+}
+
 /**
- * بطاقة QR للطباعة (A5 عمودي) بنفس تصميم بطاقة صفحة «رموز QR»:
- * رأس أخضر بالشعار، رمز QR حقيقي بإطار زوايا (محتواه ترميز دورة المياه فقط)،
- * «امسح لتقييم النظافة»، ثم «دورة مياه» وتحتها الترميز، وعنوان صفحة المسح.
+ * بطاقات QR للطباعة (A5 عمودي، بطاقة لكل صفحة) بنفس تصميم بطاقة صفحة «رموز QR»:
+ * رأس أخضر بالشعار، رمز QR حقيقي بإطار زوايا، ثم «دورة مياه» وتحتها الترميز فقط.
  */
-export async function qrCardDocument(card: { svg: string; code: string; scanUrl: string }): Promise<string> {
+export async function qrCardsDocument(cards: PrintCard[], title = 'رموز QR — دورات المياه'): Promise<string> {
   const fonts = await embeddedFontCss();
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(card.code)} — رمز QR</title><style>
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
 ${fonts}
 @page{size:A5 portrait;margin:0}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{font-family:'IBM Plex Sans Arabic',sans-serif;color:#2F4F44;display:flex;align-items:center;justify-content:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+html,body{margin:0}
+body{font-family:'IBM Plex Sans Arabic',sans-serif;color:#2F4F44;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{height:210mm;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always}
+.page:last-child{break-after:auto;page-break-after:auto}
 .card{width:118mm;border:1px solid #E3EAE6;border-radius:26px;overflow:hidden;background:#fff;display:flex;flex-direction:column;align-items:center;text-align:center}
 .head{position:relative;width:100%;background:#55957A;display:flex;justify-content:center;padding:26px 0 96px;overflow:hidden}
 .head i{position:absolute;border-radius:50%;pointer-events:none}
@@ -37,21 +48,21 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;color:#2F4F44;display:flex;al
 .qr .code{width:66mm;height:66mm;padding:6px}
 .qr .code svg{display:block;width:100%;height:100%}
 .body{display:flex;flex-direction:column;align-items:center;gap:12px;padding:22px 22px 26px}
-.chip{background:#E6F2EA;color:#3F7A62;border-radius:999px;padding:5px 18px;font-size:17px;font-weight:600}
 .name{font-size:24px;font-weight:700}
 .rcode{direction:ltr;font-size:21px;font-weight:700;letter-spacing:.5px;margin-top:4px;font-variant-numeric:tabular-nums}
-.url{direction:ltr;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#687D74;word-break:break-all;max-width:100%}
 </style></head><body>
-<div class="card">
+${cards
+  .map(
+    (card) => `<div class="page"><div class="card">
   <div class="head"><i class="r1"></i><i class="r2"></i><i class="r3"></i>
     <div class="logo" aria-label="جُودِكس"><div class="latin" dir="ltr"><span>J</span><span class="lens"><i class="ring"></i><i class="core"></i><i class="handle"></i></span><span>dex</span></div><div class="ar">جُودِكس</div></div>
   </div>
   <div class="qr"><span class="c tr"></span><span class="c tl"></span><span class="c br"></span><span class="c bl"></span><div class="code">${card.svg}</div></div>
   <div class="body">
-    <span class="chip">امسح لتقييم النظافة</span>
     <div><div class="name">دورة مياه</div><div class="rcode">${esc(card.code)}</div></div>
-    <div class="url">${esc(card.scanUrl)}</div>
   </div>
-</div>
+</div></div>`,
+  )
+  .join('\n')}
 </body></html>`;
 }

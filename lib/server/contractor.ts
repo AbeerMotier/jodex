@@ -1,4 +1,5 @@
 import 'server-only';
+import { restroomLabel } from '@/lib/domain/format';
 import { DISPLAY_STATUS, SHIFT_SHORT_LABEL } from '@/lib/domain/catalog';
 import { roundDisplayStatus, windowText, type ComplianceLevel, type RoundStatus, type Shift } from '@/lib/domain/schedule';
 import { riyadhDate, riyadhMinuteOfDay } from '@/lib/domain/time';
@@ -46,7 +47,7 @@ export async function contractorRestrooms(user: SessionUser, now: Date) {
     return {
       id: r.id as string,
       code: r.code as string,
-      name: r.name as string,
+      name: restroomLabel(r.name as string),
       floor: r.floor_label as string,
       building: bname.get(r.building_id) ?? '',
       monitor: r.monitor_id ? names[r.monitor_id] ?? '—' : '—',

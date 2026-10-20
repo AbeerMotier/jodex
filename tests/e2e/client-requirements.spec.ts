@@ -8,6 +8,7 @@ import { chromium, expect, test } from '@playwright/test';
 import jsQR from 'jsqr';
 import sharp from 'sharp';
 import { cameraJpeg, galleryJpeg, jpegWithGps } from '../support/images';
+import { serviceClient } from '../support/world';
 import { addDays, answersFor, Api, at, BASE, browserAs, clockHeaders, closeAll, evaluateSite, freshIp, monitorToday, roundOf, submitRound, uploadRequiredPhotos, world } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
@@ -17,40 +18,79 @@ const D_WIN = '2042-02-03';
 const D_FB = '2042-02-10';
 const D_PERF = '2042-02-17';
 
-test('الأدمن المحدود: يستخدم صفحات الأدمن عدا المستخدمين والصلاحيات والمباني ودورات المياه والإعدادات والأوزان (الخادم والصفحات)', async ({ browser }) => {
+test('المطّلع (سلطان الجبالي وإيهاب سمارن): يرى كل النظام بلا تعديل ولا إضافة ولا حذف (الخادم والواجهة)', async ({ browser }) => {
   const w = world();
-  const lim = await Api.as(w.users.lim);
-  // مسموح
-  for (const path of ['/api/admin/dashboard?period=week', '/api/admin/log?period=week', '/api/admin/feedback?period=week', '/api/admin/notes?period=week', '/api/admin/staff?period=week', '/api/admin/qr', '/api/admin/filters', '/api/admin/sidebar?period=week']) {
-    expect((await lim.get(path)).status(), path).toBe(200);
+  const viewer = await Api.as(w.users.lim);
+  // يرى كل شيء، بما فيه المستخدمون والمباني والإعدادات
+  for (const path of ['/api/admin/dashboard?period=week', '/api/admin/log?period=week', '/api/admin/feedback?period=week', '/api/admin/notes?period=week', '/api/admin/staff?period=week', '/api/admin/qr', '/api/admin/filters', '/api/admin/users', '/api/admin/restrooms', '/api/admin/settings']) {
+    expect((await viewer.get(path)).status(), path).toBe(200);
   }
-  // ممنوع على مستوى الخادم (لا مجرد إخفاء الروابط)
-  for (const path of ['/api/admin/users', '/api/admin/restrooms', '/api/admin/settings']) {
-    const res = await lim.get(path);
-    expect(res.status(), path).toBe(403);
+  // لا يرى حساب الأدمن الرئيسي
+  const users = await viewer.json<{ users: { username: string }[] }>(viewer.get('/api/admin/users'));
+  expect(users.users.some((u) => u.username === w.users.admin.username)).toBe(false);
+  // كل تعديل مرفوض من الخادم
+  for (const res of [
+    await viewer.post('/api/admin/users', { username: `x${randomUUID().slice(0, 6)}`, fullName: 'محاولة', role: 'admin' }),
+    await viewer.post('/api/admin/buildings', { name: 'مبنى محظور' }),
+    await viewer.put(`/api/admin/users/${w.users.m1.id}/restrooms`, { restroomIds: [] }),
+    await viewer.post(`/api/admin/users/${w.users.m1.id}/password`, {}),
+    await viewer.put('/api/admin/settings', { partialCreditPct: 50, deepCleanWeekday: 1, items: [] }),
+    await viewer.post('/api/admin/restrooms/assign', { restroomIds: [w.rooms.a.id], monitorId: null }),
+    await viewer.post(`/api/admin/bonus/${w.users.m1.id}`, { period: 'today' }),
+  ]) {
+    expect(res.status()).toBe(403);
+    expect((await res.json()).error.code).toBe('read_only');
   }
-  expect((await lim.post('/api/admin/users', { username: `x${randomUUID().slice(0, 6)}`, fullName: 'محاولة', role: 'admin' })).status()).toBe(403);
-  expect((await lim.post('/api/admin/buildings', { name: 'مبنى محظور' })).status()).toBe(403);
-  expect((await lim.put(`/api/admin/users/${w.users.m1.id}/restrooms`, { restroomIds: [] })).status()).toBe(403);
-  expect((await lim.post(`/api/admin/users/${w.users.m1.id}/password`, {})).status()).toBe(403);
-  expect((await lim.put('/api/admin/settings', { partialCreditPct: 50, deepCleanWeekday: 1, items: [] })).status()).toBe(403);
-  expect((await lim.post('/api/admin/restrooms/assign', { restroomIds: [w.rooms.a.id], monitorId: null })).status()).toBe(403);
-  await lim.dispose();
+  await viewer.dispose();
 
   const { context, page } = await browserAs(browser, w.users.lim, null);
   await page.goto('/admin');
+  await expect(page.getByTestId('admin-scope')).toHaveText('مطّلع');
   const nav = page.getByTestId('admin-sidebar');
-  await expect(nav.getByRole('link', { name: 'سجل الجولات' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: 'المستخدمون والصلاحيات' })).toHaveCount(0);
-  await expect(nav.getByRole('link', { name: 'المباني ودورات المياه' })).toHaveCount(0);
-  await expect(nav.getByRole('link', { name: 'الإعدادات والأوزان' })).toHaveCount(0);
-  for (const path of ['/admin/users', '/admin/restrooms', '/admin/settings']) {
-    await page.goto(path);
-    await expect(page.getByTestId('forbidden'), path).toBeVisible();
-  }
-  await page.goto('/admin/rounds?period=week');
-  await expect(page.getByTestId('log-table')).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'المستخدمون والصلاحيات' })).toBeVisible();
+  await page.goto('/admin/users');
+  await expect(page.getByTestId(`user-row-${w.users.m1.username}`)).toBeVisible();
+  await expect(page.getByTestId('user-add')).toHaveCount(0);
+  await expect(page.getByTestId(`user-edit-${w.users.m1.username}`)).toHaveCount(0);
+  await expect(page.getByTestId(`user-row-${w.users.admin.username}`)).toHaveCount(0);
+  await page.goto('/admin/settings');
+  await expect(page.getByTestId('save-settings')).toHaveCount(0);
+  await expect(page.getByTestId('settings-form')).toHaveAttribute('disabled', '');
+  await expect(page.getByTestId('settings-form').locator('input[type=number]').first()).toBeDisabled();
+  await page.goto('/admin/restrooms');
+  await expect(page.getByTestId('restroom-add')).toHaveCount(0);
   await context.close();
+});
+
+test('الأدمن المقيّد (حسام باشويه وفايز ميره): يطّلع ويعدّل ويضيف الحسابات، ولا يرى حساب الأدمن الرئيسي ولا يعرف بوجوده', async () => {
+  const w = world();
+  const svc = serviceClient();
+  const admin = await Api.as(w.users.admin);
+  const run = randomUUID().slice(0, 6);
+  // الأدمن الرئيسي ينشئ أدمنًا مقيّدًا
+  const created = await admin.json<{ id: string; username: string; password: string }>(
+    admin.post('/api/admin/users', { username: `qa${run}.res`, fullName: 'أدمن مقيّد', role: 'admin', adminScope: 'restricted' }),
+  );
+  const restricted = await Api.as({ id: created.id, username: created.username, password: created.password, name: '' });
+  try {
+    const list = await restricted.json<{ users: { id: string; username: string }[] }>(restricted.get('/api/admin/users'));
+    expect(list.users.some((u) => u.id === w.users.admin.id)).toBe(false);
+    expect(list.users.some((u) => u.id === w.users.m1.id)).toBe(true);
+    // لا يصل لحساب الأدمن الرئيسي بأي عملية (كأنه غير موجود)
+    expect((await restricted.ctx.patch(`/api/admin/users/${w.users.admin.id}`, { headers: restricted.headers(), data: { fullName: 'اسم جديد' } })).status()).toBe(404);
+    expect((await restricted.post(`/api/admin/users/${w.users.admin.id}/password`, {})).status()).toBe(404);
+    // يضيف ويعدّل الحسابات، ولا يمنح مستوى الأدمن الرئيسي
+    const added = await restricted.json<{ id: string }>(restricted.post('/api/admin/users', { username: `qa${run}.new`, fullName: 'حساب جديد', role: 'supervisor' }));
+    await restricted.json(restricted.ctx.patch(`/api/admin/users/${added.id}`, { headers: restricted.headers(), data: { fullName: 'حساب معدّل' } }));
+    expect((await restricted.post('/api/admin/users', { username: `qa${run}.sup`, fullName: 'محاولة', role: 'admin', adminScope: 'super' })).status()).toBe(403);
+    expect((await restricted.ctx.patch(`/api/admin/users/${added.id}`, { headers: restricted.headers(), data: { role: 'admin', adminScope: 'super' } })).status()).toBe(403);
+    await svc.from('users').update({ is_active: false }).eq('id', added.id);
+    // الإعدادات مسموحة له
+    expect((await restricted.get('/api/admin/settings')).status()).toBe(200);
+  } finally {
+    await svc.from('users').update({ is_active: false }).eq('id', created.id);
+    await closeAll(restricted, admin);
+  }
 });
 
 test('المقاول: يرى دورات المياه المسندة إليه للعرض فقط، ولا يصل لصفحات ووظائف الأدوار الأخرى', async ({ browser }) => {
@@ -72,6 +112,9 @@ test('المقاول: يرى دورات المياه المسندة إليه ل�
   const { context, page } = await browserAs(browser, w.users.con, null);
   expect(new URL(page.url()).pathname).toBe('/contractor');
   const table = page.getByTestId('contractor-table');
+  // القائمة مخفية حتى الضغط عليها
+  await expect(table).toBeHidden();
+  await page.getByTestId('contractor-toggle').click();
   await expect(table).toBeVisible();
   await expect(table.getByText(w.rooms.a.code)).toBeVisible();
   await expect(table.getByText(w.rooms.b.code)).toHaveCount(0);
@@ -283,13 +326,13 @@ test('منع إعادة التقييم 24 ساعة لنفس دورة الميا�
   await closeAll(s1, s2);
 });
 
-test('رمز QR يحتوي الترميز فقط، والبطاقة «دورة مياه» وتحتها الترميز، وصفحة المسح تفتح التقييم بالترميز', async ({ browser }) => {
+test('رمز QR = رابط التقييم المنتهي بالترميز (تفتحه كاميرا الجوال)، والبطاقة «دورة مياه» وتحتها الترميز فقط، وطباعة كل الرموز', async ({ browser }) => {
   const w = world();
   const admin = await Api.as(w.users.admin);
   const { cards } = await admin.json<{ cards: { restroom: { id: string; code: string }; content: string; svg: string }[] }>(admin.get(`/api/admin/qr?building=${w.building.id}`));
   expect(cards).toHaveLength(3);
   for (const card of cards) {
-    expect(card.content).toBe(card.restroom.code);
+    expect(card.content).toBe(`${BASE()}/r/${card.restroom.code}`);
     // فك الرمز الحقيقي من صورة SVG
     const { data, info } = await sharp(Buffer.from(card.svg))
       .resize(400, 400)
@@ -299,16 +342,27 @@ test('رمز QR يحتوي الترميز فقط، والبطاقة «دورة �
       .raw()
       .toBuffer({ resolveWithObject: true });
     const decoded = jsQR(new Uint8ClampedArray(data), info.width, info.height);
-    expect(decoded?.data).toBe(card.restroom.code);
-    expect(decoded?.data).not.toMatch(/https?:|\//);
+    expect(decoded?.data).toBe(`${BASE()}/r/${card.restroom.code}`);
+    expect(decoded?.data).not.toContain(card.restroom.id);
   }
+  // طباعة كل الرموز: ملف PDF واحد بصفحة لكل رمز
+  const pdf = await admin.get(`/api/admin/qr/print?building=${w.building.id}`);
+  expect(pdf.status()).toBe(200);
+  expect(pdf.headers()['content-type']).toBe('application/pdf');
+  const body = await pdf.body();
+  expect(body.subarray(0, 4).toString()).toBe('%PDF');
+  expect(body.toString('latin1').match(/\/Type\s*\/Page[^s]/g)?.length).toBe(3);
   await admin.dispose();
 
   const { context, page } = await browserAs(browser, w.users.admin, null);
   await page.goto(`/admin/qr?building=${w.building.id}`);
   const first = page.getByTestId('qr-card').first();
-  await expect(first).toContainText('دورة مياه');
   await expect(first.getByTestId('qr-code-text')).toHaveText(/^Q[0-9A-F]+[ABC]$/);
+  // نص البطاقة: «دورة مياه» والترميز فقط (بلا اسم مفصل أو دور أو رابط)
+  const text = (await first.innerText()).replace(/فتح صفحة التقييم|طباعة/g, '');
+  expect(text).toContain('دورة مياه');
+  expect(text).not.toMatch(/الدور|المبنى|http|امسح/);
+  await expect(page.getByTestId('qr-print-all')).toBeVisible();
   await context.close();
 
   // صفحة المسح: إدخال الترميز يدويًا ← صفحة التقييم لدورة المياه نفسها
@@ -374,6 +428,9 @@ test('صفحة المشرف: الموقع محدد بالمسح وللعرض ف�
   await expect(page.getByTestId('site-select')).toHaveCount(0);
   await expect(page.getByTestId('scan-prompt')).toBeVisible();
   await expect(page.getByTestId('submit-evaluation')).toHaveCount(0);
+  await expect(page.getByTestId('scan-site')).toHaveCount(0);
+  await expect(page.getByTestId('remaining-sites')).toContainText('المواقع المتبقية لتقييمها اليوم');
+  await page.getByTestId('assigned-sites').locator('summary').click();
   await expect(page.getByTestId('assigned-sites')).toContainText(w.rooms.a.code);
   // فتح الموقع من رمز QR (الترميز) ← جدول الموقع للعرض والتقييم
   await page.goto(`/go/${w.rooms.b.code}`);

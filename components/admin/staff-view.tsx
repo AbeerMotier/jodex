@@ -14,12 +14,13 @@ import { fmtPct, scoreColor } from '@/lib/domain/format';
 import type { Classification } from '@/lib/domain/metrics';
 import type { Period } from '@/lib/domain/time';
 import { useFilterOptions, useUrlFilters } from './filters-context';
+import { useAdminAccess } from './admin-shell';
 import { LocationFilters } from './location-filters';
 import { ActiveFilters, PageHeader } from './page-header';
 import { FilterGroup, Segmented, SelectField, Toolbar } from './toolbar';
 
 interface StaffData {
-  candidates: { monitorId: string; name: string; rank: number; cp: number | null; q: number | null; approved: boolean; restroom: { name: string; floor: string; building: string } }[];
+  candidates: { monitorId: string; name: string; rank: number; cp: number | null; s?: number | null; q: number | null; approved: boolean; restroom: { name: string; floor: string; building: string } }[];
   rows: {
     rank: number;
     monitorId: string;
@@ -45,6 +46,7 @@ const CONFETTI = [
 ];
 
 export function StaffView() {
+  const { canEdit } = useAdminAccess();
   const f = useUrlFilters();
   const options = useFilterOptions();
   const toast = useToast();
@@ -123,7 +125,7 @@ export function StaffView() {
       <section className="flex animate-fade-up flex-col gap-3" data-testid="bonus-section">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="m-0 text-[16px] font-bold">المرشحون للمكافأة</h2>
-          <span className="text-[12.5px] text-muted">الترشيح آلي حسب الالتزام وجودة التقييم</span>
+          <span className="text-[12.5px] text-muted">أعلى 3 حسب الالتزام وتقييم المشرف (التقييمات المطابقة للواقع فقط)</span>
         </div>
         {loading && !data && (
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,250px),1fr))] gap-3.5">
@@ -180,8 +182,11 @@ export function StaffView() {
                   <div className="mt-[3px] text-[12px] text-ink-2">
                     {c.restroom.name} · {c.restroom.floor} · {c.restroom.building}
                   </div>
-                  <div className="mt-1 text-[11.5px] text-muted">جودة {fmtPct(c.q)}</div>
+                  <div className="mt-1 text-[11.5px] text-muted" data-testid="bonus-supervisor">
+                    تقييم المشرف {fmtPct(c.s ?? null)}
+                  </div>
                 </div>
+                {canEdit ? (
                 <button
                   type="button"
                   onClick={() => toggle(c)}
@@ -197,6 +202,9 @@ export function StaffView() {
                   {busy === c.monitorId && <Spinner />}
                   {c.approved ? 'معتمد ✓' : 'اعتماد المكافأة'}
                 </button>
+                ) : (
+                  <span className="relative text-[13px] font-semibold text-ink-2">{c.approved ? 'المكافأة معتمدة ✓' : 'غير معتمدة'}</span>
+                )}
               </div>
             ))}
           </div>

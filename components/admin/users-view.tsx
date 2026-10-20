@@ -7,8 +7,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiClientError } from '@/lib/client/api';
 import { useApi } from '@/lib/client/use-api';
-import { ADMIN_SCOPE_LABEL, ROLE_LABEL, type AdminScope, type MonitorKind, type Role } from '@/lib/domain/catalog';
+import { ADMIN_SCOPE_LABEL, ADMIN_SCOPE_SHORT, ROLE_LABEL, type AdminScope, type MonitorKind, type Role } from '@/lib/domain/catalog';
 import { userCreateSchema, userUpdateSchema } from '@/lib/domain/validation';
+import { useAdminAccess } from './admin-shell';
 import { BTN_PRIMARY, BTN_SMALL, DialogActions, Field, INPUT, PasswordDialog, RestroomChecklist, type PickRoom } from './manage-ui';
 import { PageHeader } from './page-header';
 
@@ -66,11 +67,12 @@ function detailText(u: UserView) {
   }
   if (u.role === 'supervisor') return u.restroomIds.length ? `يقيّم ${u.restroomIds.length} موقعًا` : 'لا توجد مواقع مسندة';
   if (u.role === 'contractor') return u.restroomIds.length ? `${u.restroomIds.length} دورة مياه مسندة (عرض فقط)` : 'لا توجد دورات مياه مسندة';
-  return u.adminScope === 'limited' ? ADMIN_SCOPE_LABEL.limited : 'كل الصلاحيات';
+  return u.adminScope ? ADMIN_SCOPE_LABEL[u.adminScope] : '—';
 }
 
 export function UsersView() {
   const toast = useToast();
+  const access = useAdminAccess();
   const { data, error, loading, reload } = useApi<UsersData>('/api/admin/users');
   const [tab, setTab] = useState<Role | 'all'>('all');
   const [q, setQ] = useState('');
@@ -119,11 +121,17 @@ export function UsersView() {
     <>
       <PageHeader
         title="المستخدمون والصلاحيات"
-        sub="إضافة الحسابات وتعديل أدوارها، وربط المراقبين بدورات المياه، وتحديد مواقع المشرفين"
+        sub={
+          access.canEdit
+            ? 'إضافة الحسابات وتعديل أدوارها، وربط المراقبين بدورات المياه، وتحديد مواقع المشرفين'
+            : 'للاطلاع فقط — صلاحيتك لا تسمح بالتعديل أو الإضافة أو الحذف'
+        }
         actions={
-          <button type="button" className={BTN_PRIMARY} onClick={() => setEditing('new')} data-testid="user-add">
-            <IconPlus size={16} /> إضافة مستخدم
-          </button>
+          access.canEdit ? (
+            <button type="button" className={BTN_PRIMARY} onClick={() => setEditing('new')} data-testid="user-add">
+              <IconPlus size={16} /> إضافة مستخدم
+            </button>
+          ) : undefined
         }
       />
 
@@ -190,6 +198,11 @@ export function UsersView() {
                       {u.monitorKind === 'primary' ? 'أساسي' : 'نائب'}
                     </Chip>
                   )}
+                  {u.adminScope && (
+                    <Chip tone="neutral" size="sm">
+                      {ADMIN_SCOPE_SHORT[u.adminScope]}
+                    </Chip>
+                  )}
                 </span>
                 <span className="text-[12.5px] text-muted">{detailText(u)}</span>
                 <span>
@@ -198,6 +211,9 @@ export function UsersView() {
                   </Chip>
                 </span>
                 <span className="flex flex-wrap gap-1.5">
+                  {!access.canEdit && <span className="text-[12px] text-muted">اطلاع فقط</span>}
+                  {access.canEdit && (
+                  <>
                   <button type="button" className={BTN_SMALL} onClick={() => setEditing(u)} data-testid={`user-edit-${u.username}`}>
                     <IconEdit size={14} /> تعديل
                   </button>
@@ -212,6 +228,8 @@ export function UsersView() {
                   <button type="button" className={BTN_SMALL} disabled={busy === u.id} onClick={() => toggleActive(u)} data-testid={`user-toggle-${u.username}`}>
                     {u.isActive ? 'تعطيل' : 'تفعيل'}
                   </button>
+                  </>
+                  )}
                 </span>
               </div>
             ))}
@@ -221,6 +239,7 @@ export function UsersView() {
 
       <UserDialog
         target={editing}
+        canGrantSuper={access.isSuper}
         primaries={(data?.users ?? []).filter((u) => u.role === 'contractor_monitor' && u.monitorKind === 'primary' && u.isActive)}
         onClose={() => setEditing(null)}
         onSaved={(created) => {
@@ -257,11 +276,14 @@ export function UsersView() {
 
 function UserDialog({
   target,
+  canGrantSuper,
   primaries,
   onClose,
   onSaved,
 }: {
   target: UserView | 'new' | null;
+  /** مستوى «الأدمن الرئيسي» لا يمنحه إلا أدمن رئيسي */
+  canGrantSuper: boolean;
   primaries: UserView[];
   onClose: () => void;
   onSaved: (created: { username: string; password: string } | null) => void;
@@ -272,7 +294,7 @@ function UserDialog({
   const [role, setRole] = useState<Role>('contractor_monitor');
   const [kind, setKind] = useState<MonitorKind>('primary');
   const [substituteFor, setSubstituteFor] = useState('');
-  const [adminScope, setAdminScope] = useState<AdminScope>('full');
+  const [adminScope, setAdminScope] = useState<AdminScope>('restricted');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -287,14 +309,14 @@ function UserDialog({
       setRole('contractor_monitor');
       setKind('primary');
       setSubstituteFor('');
-      setAdminScope('full');
+      setAdminScope('restricted');
     } else {
       setUsername(target.username);
       setFullName(target.fullName);
       setRole(target.role);
       setKind(target.monitorKind ?? 'primary');
       setSubstituteFor(target.substituteForId ?? '');
-      setAdminScope(target.adminScope ?? 'full');
+      setAdminScope(target.adminScope ?? 'restricted');
     }
   } else if (!target && openedFor) {
     setOpenedFor(null);
@@ -356,9 +378,9 @@ function UserDialog({
           </select>
         </Field>
         {role === 'admin' && (
-          <Field label="صلاحيات الأدمن" error={errors.adminScope} hint="المحدود يرى كل صفحات الأدمن ويستخدمها عدا المستخدمين والصلاحيات والمباني ودورات المياه والإعدادات والأوزان.">
+          <Field label="صلاحيات الأدمن" error={errors.adminScope} hint="المقيّد يطّلع ويعدّل ويضيف الحسابات، والمطّلع يرى كل النظام بلا تعديل أو إضافة أو حذف.">
             <select value={adminScope} onChange={(e) => setAdminScope(e.target.value as AdminScope)} className={INPUT} data-testid="user-admin-scope">
-              {(['full', 'limited'] as AdminScope[]).map((s) => (
+              {((canGrantSuper ? ['super', 'restricted', 'viewer'] : ['restricted', 'viewer']) as AdminScope[]).map((s) => (
                 <option key={s} value={s}>
                   {ADMIN_SCOPE_LABEL[s]}
                 </option>

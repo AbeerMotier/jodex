@@ -31,7 +31,7 @@ export function FeedbackView() {
   const active = [
     f.get('building') && options?.buildings.find((b) => b.id === f.get('building'))?.name,
     f.get('floor'),
-    f.get('restroom') && options?.restrooms.find((r) => r.id === f.get('restroom'))?.name,
+    f.get('restroom') && options?.restrooms.find((r) => r.id === f.get('restroom'))?.code,
     f.get('rating') && FEEDBACK_RATING_LABEL[f.get('rating') as FeedbackRating],
   ].filter(Boolean) as string[];
 

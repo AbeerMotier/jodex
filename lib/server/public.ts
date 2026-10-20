@@ -1,4 +1,5 @@
 import 'server-only';
+import { restroomLabel } from '@/lib/domain/format';
 import { createHmac } from 'node:crypto';
 import { FEEDBACK_WINDOW_MINUTES } from '@/lib/domain/catalog';
 import { env } from './env';
@@ -56,7 +57,7 @@ export async function resolveRestroomRef(ref: string): Promise<PublicRestroom | 
     qrToken: qr.token,
     restroomId: room.id,
     code: room.code,
-    name: room.name,
+    name: restroomLabel(room.name),
     floor: room.floor_label,
     building: building?.name ?? '',
   };

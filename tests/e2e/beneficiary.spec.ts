@@ -44,7 +44,7 @@ test('مسح QR حقيقي من صفحة رموز QR (الترميز فقط) ←
   let decoded = '';
   try {
     await adminUi.page.goto(`/admin/qr?building=${w.building.id}`);
-    const card = adminUi.page.getByTestId('qr-card').filter({ hasText: room.name });
+    const card = adminUi.page.getByTestId('qr-card').filter({ hasText: room.code });
     await expect(card).toHaveCount(1);
     const png = await card.getByRole('img', { name: new RegExp(room.code) }).screenshot({ scale: 'device' });
     const { data, info } = await sharp(png)
@@ -59,17 +59,19 @@ test('مسح QR حقيقي من صفحة رموز QR (الترميز فقط) ←
   } finally {
     await closeAll(adminUi.context);
   }
-  // محتوى الرمز = الترميز فقط (بلا رابط ولا اسم ولا معرّف داخلي)
-  expect(decoded).toBe(room.code);
-  expect(decoded).not.toContain(BASE());
+  // محتوى الرمز = رابط صفحة التقييم المنتهي بترميز دورة المياه (تفتحه كاميرا الجوال)، بلا اسم ولا معرّف داخلي
+  expect(decoded).toBe(`${BASE()}/r/${room.code}`);
   expect(decoded).not.toContain(room.id);
+  expect(decoded).not.toContain(room.token);
 
-  // 2) المستفيد يفتح دورة المياه بالترميز المقروء (صفحة المسح تنقله إلى /r/{الترميز}) ويقيّم «سيئ» مع سبب «أخرى»
+  // 2) المستفيد يفتح الرابط المقروء ويقيّم «سيئ» مع سبب «أخرى»
   const visitor = await browserAs(browser, null, at(DAY, '10:01'), { width: 390, height: 844 });
   try {
     const page = visitor.page;
-    await page.goto(`/r/${decoded}`);
-    await expect(page.getByText(room.name).first()).toBeVisible();
+    await page.goto(decoded);
+    await expect(page.getByTestId('rate-code')).toHaveText(room.code);
+    // الاسم المعروض «دورة مياه» فقط (بلا رقم ولا رجال/نساء)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('دورة مياه');
     await page.getByTestId('face-bad').click();
     // «سيئ» بلا سبب أو «أخرى» بلا نص: لا يظهر زر الإرسال أصلًا
     await expect(page.getByTestId('submit-feedback')).toHaveCount(0);
@@ -80,7 +82,7 @@ test('مسح QR حقيقي من صفحة رموز QR (الترميز فقط) ←
     await page.getByTestId('submit-feedback').click();
     await expect(page.getByTestId('thanks')).toBeVisible();
     // نفس الجهاز خلال 24 ساعة ← رسالة المنع بدل النموذج
-    await page.goto(`/r/${decoded}`);
+    await page.goto(decoded);
     await expect(page.getByTestId('rate-blocked')).toContainText(/سبق أن قيّمت دورة المياه هذه/);
     await expect(page.getByTestId('face-excellent')).toHaveCount(0);
     expect(visitor.errors).toEqual([]);

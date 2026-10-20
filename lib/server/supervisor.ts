@@ -1,4 +1,5 @@
 import 'server-only';
+import { restroomLabel } from '@/lib/domain/format';
 import { randomUUID } from 'node:crypto';
 import { ANSWER_LABEL, DISPLAY_STATUS, MAX_SUPERVISOR_PHOTOS, SHIFT_LABEL } from '@/lib/domain/catalog';
 import { periodRange, riyadhDate, riyadhMinuteOfDay } from '@/lib/domain/time';
@@ -62,7 +63,7 @@ export async function supervisorSites(user: SessionUser, now: Date) {
       return {
         id: r.id,
         code: r.code,
-        name: r.name,
+        name: restroomLabel(r.name),
         floor: r.floor_label,
         building: bname.get(r.building_id) ?? '',
         lastSubmittedAt: submitted[0]?.submitted_at ?? null,
@@ -270,7 +271,7 @@ export async function submitEvaluation(user: SessionUser, input: EvaluationSubmi
         evaluationId: evaluation.id,
         submittedAt: evaluation.submitted_at,
         score: Number(evaluation.score),
-        restroom: { name: room.name, floor: room.floor_label },
+        restroom: { name: restroomLabel(room.name), floor: room.floor_label },
       };
     }
     throw new ApiError(409, 'evaluation_already_submitted', 'تم إرسال هذا التقييم مسبقًا ولا يمكن تعديله.');
@@ -340,7 +341,7 @@ export async function submitEvaluation(user: SessionUser, input: EvaluationSubmi
     evaluationId: evaluation.id,
     submittedAt: now.toISOString(),
     score,
-    restroom: { name: room.name, floor: room.floor_label },
+    restroom: { name: restroomLabel(room.name), floor: room.floor_label },
     note: note ? { severity: note.severity, text: note.text } : null,
   };
 }

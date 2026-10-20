@@ -1,4 +1,5 @@
 import 'server-only';
+import { restroomLabel } from '@/lib/domain/format';
 import { randomUUID } from 'node:crypto';
 import { BADGE_STATUS, CAMERA_ONLY_SLOTS, DISPLAY_STATUS, PHOTO_SLOTS, SHIFT_LABEL, type PhotoSlot } from '@/lib/domain/catalog';
 import { minutesToHHMM, riyadhDate, riyadhMinuteOfDay, riyadhWeekday } from '@/lib/domain/time';
@@ -169,7 +170,7 @@ export async function loadMonitorToday(user: SessionUser, now: Date, requestedRe
     return {
       id: room.id,
       code: room.code,
-      name: room.name,
+      name: restroomLabel(room.name),
       floor: room.floor_label,
       building: buildingName.get(room.building_id) ?? '',
       badge: { state, ...BADGE_STATUS[state] },
@@ -235,7 +236,7 @@ export async function loadMonitorToday(user: SessionUser, now: Date, requestedRe
     minute,
     user: { id: user.id, name: user.fullName, isSubstitute: scope.isSubstitute },
     onBehalfOf: scope.isSubstitute ? scope.primaryName : null,
-    restroom: { id: room.id, name: room.name, code: room.code, floor: room.floor_label, building: building.name },
+    restroom: { id: room.id, name: restroomLabel(room.name), code: room.code, floor: room.floor_label, building: building.name },
     restrooms: roomSummaries,
     notice:
       requestedRestroomId && !rooms.some((r) => r.id === requestedRestroomId)

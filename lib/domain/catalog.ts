@@ -3,8 +3,12 @@ import type { Answer, NoteSeverity, Rating } from './scoring';
 import type { BadgeState, RoundDisplayStatus, Shift } from './schedule';
 
 export type Role = 'admin' | 'supervisor' | 'contractor_monitor' | 'contractor';
-/** نطاق صلاحية الأدمن: الكامل، أو المحدود (بدون المستخدمين والصلاحيات والمباني ودورات المياه والإعدادات والأوزان) */
-export type AdminScope = 'full' | 'limited';
+/**
+ * مستوى صلاحية الأدمن:
+ * super = الأدمن الرئيسي (كل النظام وكل الحسابات)، restricted = أدمن مقيّد (إدارة كاملة دون رؤية الأدمن الرئيسي)،
+ * viewer = مطّلع (يرى كل النظام بلا تعديل ولا إضافة ولا حذف).
+ */
+export type AdminScope = 'super' | 'restricted' | 'viewer';
 export type MonitorKind = 'primary' | 'substitute';
 export type ItemGroup = 'contractor' | 'deep' | 'supervisor';
 
@@ -16,9 +20,11 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export const ADMIN_SCOPE_LABEL: Record<AdminScope, string> = {
-  full: 'صلاحيات كاملة',
-  limited: 'بدون إدارة المستخدمين والمباني والإعدادات',
+  super: 'الأدمن الرئيسي — كل النظام وكل الحسابات',
+  restricted: 'أدمن مقيّد — اطلاع وتعديل وإضافة حسابات',
+  viewer: 'مطّلع — عرض فقط بلا تعديل',
 };
+export const ADMIN_SCOPE_SHORT: Record<AdminScope, string> = { super: 'أدمن رئيسي', restricted: 'أدمن مقيّد', viewer: 'مطّلع' };
 
 export const ROLE_HOME: Record<Role, string> = {
   admin: '/admin',

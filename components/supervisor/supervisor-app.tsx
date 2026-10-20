@@ -1,10 +1,8 @@
 'use client';
-import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { QrScanner } from '@/components/common/qr-scanner';
 import { Card, MissingList } from '@/components/ui/card';
 import { Avatar, GreenHero, InfoTile } from '@/components/ui/hero';
-import { Lightbox, Modal, SuccessDialog } from '@/components/ui/overlay';
+import { Lightbox, SuccessDialog } from '@/components/ui/overlay';
 import { Skeleton, SkeletonCard } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/ui/toast';
@@ -53,8 +51,6 @@ function loadForm(userId: string, evalId: string): EvalForm {
 
 export function SupervisorApp({ userId, initialSiteId = null }: { userId: string; initialSiteId?: string | null }) {
   const toast = useToast();
-  const router = useRouter();
-  const [scanning, setScanning] = useState(false);
   const { data, error, loading, reload } = useApi<SitesData>('/api/supervisor/sites');
   const now = useServerClock(data?.serverNow, 15_000);
   const [siteId, setSiteId] = useState<string | null>(null);
@@ -309,12 +305,7 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
       </GreenHero>
 
       <Card className="flex flex-col gap-3 p-[18px]" data-testid="site-card">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="m-0 text-[15px] font-bold">الموقع المراد تقييمه</h2>
-          <button type="button" onClick={() => setScanning(true)} className="touch-target rounded-[11px] border border-line bg-white px-3.5 py-2 text-[13.5px] font-semibold text-ink hover:border-[#8FB8A2]" data-testid="scan-site">
-            مسح رمز QR لدورة المياه
-          </button>
-        </div>
+        <h2 className="m-0 text-[15px] font-bold">الموقع المراد تقييمه</h2>
         {site ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[480px] border-collapse text-right text-[13.5px]" data-testid="site-table">
@@ -342,11 +333,48 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
           </div>
         ) : (
           <div className="rounded-[12px] bg-[#F6F9F7] px-3.5 py-3 text-[13.5px] leading-[1.7] text-ink-2" data-testid="scan-prompt">
-            امسح رمز QR الملصق على دورة المياه لبدء تقييمها. لا يمكن اختيار الموقع من القائمة.
+            امسح رمز QR الملصق على دورة المياه بكاميرا الجوال لفتح تقييمها. لا يمكن اختيار الموقع من القائمة.
           </div>
         )}
+        <details className="text-[13px]" data-testid="remaining-sites">
+          <summary className="cursor-pointer font-semibold text-ink-2">
+            المواقع المتبقية لتقييمها اليوم ({data.sites.filter((s) => !s.lastSubmittedAt).length} من {data.sites.length}) — اضغط للعرض
+          </summary>
+          <div className="mt-2 max-h-[300px] overflow-auto rounded-[10px] border border-line">
+            {data.sites.every((s) => s.lastSubmittedAt) ? (
+              <div className="px-3 py-3 text-center text-muted">قيّمت كل المواقع المسندة إليك اليوم ✓</div>
+            ) : (
+              <table className="w-full min-w-[480px] border-collapse text-right text-[12.5px]">
+                <thead className="sticky top-0 bg-white">
+                  <tr className="text-muted">
+                    <th className="px-3 py-1.5 font-semibold">المبنى</th>
+                    <th className="px-3 py-1.5 font-semibold">الدور</th>
+                    <th className="px-3 py-1.5 font-semibold">دورة المياه</th>
+                    <th className="px-3 py-1.5 font-semibold">ترميز دورة المياه</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.sites
+                    .filter((s) => !s.lastSubmittedAt)
+                    .map((s) => (
+                      <tr key={s.id} className="border-t border-divider">
+                        <td className="px-3 py-1.5">{s.building}</td>
+                        <td className="px-3 py-1.5">{s.floor}</td>
+                        <td className="px-3 py-1.5">{s.name}</td>
+                        <td className="px-3 py-1.5">
+                          <span dir="ltr" className="tabular">
+                            {s.code}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </details>
         <details className="text-[13px]" data-testid="assigned-sites">
-          <summary className="cursor-pointer font-semibold text-ink-2">المواقع المسندة إليك ({data.sites.length}) — للعرض فقط</summary>
+          <summary className="cursor-pointer font-semibold text-ink-2">المواقع المسندة إليك ({data.sites.length}) — للاطلاع فقط، اضغط للعرض</summary>
           <div className="mt-2 max-h-[300px] overflow-auto rounded-[10px] border border-line">
             <table className="w-full min-w-[480px] border-collapse text-right text-[12.5px]">
               <thead className="sticky top-0 bg-white">
@@ -561,17 +589,6 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
         </>
       )}
 
-      <Modal open={scanning} onClose={() => setScanning(false)} title="مسح رمز QR لدورة المياه" subtitle="يُفتح تقييم دورة المياه التي تمسح رمزها" width={460}>
-        <div className="pb-3">
-          <QrScanner
-            active={scanning}
-            onResult={(ref) => {
-              setScanning(false);
-              router.push(`/go/${encodeURIComponent(ref)}`);
-            }}
-          />
-        </div>
-      </Modal>
       <ContractorRoundsModal open={roundsOpen} onClose={() => setRoundsOpen(false)} data={rounds} loading={roundsLoading} error={roundsError} />
       <SuccessDialog open={Boolean(success)} title={success?.title ?? ''} sub={success?.sub ?? ''} meta={success?.meta} onClose={() => setSuccess(null)} />
       <Lightbox src={lightbox} onClose={() => setLightbox(null)} alt="صورة المشرف" />

@@ -46,7 +46,7 @@ export function LogView() {
     f.get('floor'),
     f.get('restroom') && (() => {
       const r = options?.restrooms.find((x) => x.id === f.get('restroom'));
-      return r ? `${r.name} · ${r.floor}` : '';
+      return r ? `${r.code} · ${r.floor}` : '';
     })(),
     f.get('status') && STATUS_OPTIONS.find((s) => s.value === f.get('status'))?.label,
     f.get('employee') && employees.find((e) => e.value === f.get('employee'))?.label.split(' · ')[0],

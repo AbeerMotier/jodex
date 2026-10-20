@@ -4,7 +4,7 @@
  */
 import { expect, test } from '@playwright/test';
 import { serviceClient } from '../support/world';
-import { Api, at, browserAs, closeAll, completeRound, rgb, world } from './helpers';
+import { Api, at, browserAs, closeAll, completeRound, evaluateSite, rgb, world } from './helpers';
 
 interface SettingsItem {
   id: string;
@@ -171,17 +171,26 @@ test('التصدير ينتج ملفات فعلية (PDF/Excel) لكل تقري�
   expect(audit!.some((a) => a.action === 'qr.print')).toBe(true);
 });
 
-test('المكافآت: اعتماد مرشح (التزام ≥ 90 وجودة ≥ 85) وإلغاء اعتماده، وغير المرشح مرفوض', async ({ browser }) => {
+test('المكافآت: المرشحون أعلى 3 حسب الالتزام وتقييم المشرف «المطابق للواقع»، واعتماد مرشح وإلغاؤه، وغير المرشح مرفوض', async ({ browser }) => {
   const w = world();
   const date = '2042-07-15';
+  const m2 = await Api.as(w.users.m2);
   await completeRound(m1, 'am', { uploadAt: at(date, '08:00'), submitAt: at(date, '08:30') });
+  await completeRound(m2, 'am', { uploadAt: at(date, '08:00'), submitAt: at(date, '08:40') });
+  await m2.dispose();
   await completeRound(m1, 'pm', { uploadAt: at(date, '13:10'), submitAt: at(date, '13:30') });
+  // تقييم المشرف: دورة m1 «مطابقة للواقع»، ودورة m2 «غير مطابقة» فلا تُحتسب له
+  const sup = await Api.as(w.users.sup, at(date, '11:00'));
+  expect((await evaluateSite(sup, w.rooms.a.id, () => 5, { matchesRound: 'yes' })).res.status()).toBe(200);
+  expect((await evaluateSite(sup, w.rooms.b.id, () => 5, { matchesRound: 'no' })).res.status()).toBe(200);
+  await sup.dispose();
   admin.at = at(date, '17:00');
-  const staff = await admin.json<{ candidates: { monitorId: string; cp: number; q: number; approved: boolean }[] }>(
+  const staff = await admin.json<{ candidates: { monitorId: string; cp: number; s: number; approved: boolean }[] }>(
     admin.get(`/api/admin/staff?period=today&building=${w.building.id}`),
   );
   const cand = staff.candidates.find((c) => c.monitorId === w.users.m1.id)!;
-  expect(cand).toMatchObject({ cp: 100, q: 100, approved: false });
+  expect(cand).toMatchObject({ cp: 100, s: 100, approved: false });
+  expect(staff.candidates.some((c) => c.monitorId === w.users.m2.id)).toBe(false);
 
   expect((await admin.post(`/api/admin/bonus/${w.users.m2.id}`, { period: 'today' })).status()).toBe(409);
   expect((await admin.post(`/api/admin/bonus/${w.users.m1.id}`, { period: 'today' })).status()).toBe(200);

@@ -14,7 +14,7 @@ beforeAll(async () => {
   const svc = serviceClient();
   const { error } = await svc.rpc('ensure_daily_rounds', { p_date: DATE });
   if (error) throw error;
-  for (const key of ['admin', 'm1', 'm2', 'sub', 'sup', 'sup2', 'con'] as const) {
+  for (const key of ['admin', 'm1', 'm2', 'sub', 'sup', 'sup2', 'con', 'lim'] as const) {
     const u = world.users[key];
     clients[key] = await userClient(u.username, u.password);
   }
@@ -67,6 +67,15 @@ describe('RLS — القراءة حسب الدور والنطاق', () => {
     expect(ins.error).not.toBeNull();
     const upd = await clients.con.from('restrooms').update({ name: 'x' }).eq('id', world.rooms.a.id).select('id');
     expect(upd.data ?? []).toHaveLength(0);
+  });
+
+  it('حساب الأدمن الرئيسي مخفي عن بقية الأدمن حتى في القراءة المباشرة', async () => {
+    const { data: fromViewer } = await clients.lim.from('users').select('id').eq('id', world.users.admin.id);
+    expect(fromViewer ?? []).toHaveLength(0);
+    const { data: others } = await clients.lim.from('users').select('id').eq('id', world.users.m1.id);
+    expect(others).toHaveLength(1);
+    const { data: fromSuper } = await clients.admin.from('users').select('id').eq('id', world.users.admin.id);
+    expect(fromSuper).toHaveLength(1);
   });
 
   it('الأدمن يرى الكل', async () => {
