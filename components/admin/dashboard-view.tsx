@@ -161,7 +161,6 @@ export function DashboardView() {
                 />
               )}
             </div>
-            {data.quality.beneficiary?.counts && <SatisfactionFormula b={data.quality.beneficiary} />}
           </section>
 
           <section className="rounded-[20px] border border-line bg-white p-5">
@@ -286,34 +285,6 @@ export function DashboardView() {
       )}
       <DetailDrawer target={detail} onClose={() => setDetail(null)} />
     </>
-  );
-}
-
-/** طريقة احتساب مؤشر رضا المستفيدين بأرقام الفترة الحالية (يتحدث تلقائيًا مع التقييمات) */
-function SatisfactionFormula({ b }: { b: NonNullable<DashboardData['quality']['beneficiary']> }) {
-  const c = b.counts!;
-  const w = b.weights ?? { excellent: 60, good: 30, bad: 10 };
-  const max = b.maxWeight ?? 60;
-  const points = c.excellent * w.excellent + c.good * w.good + c.bad * w.bad;
-  return (
-    <div className="mt-3 flex flex-col gap-1.5 rounded-[14px] border border-line bg-[#F6F9F7] px-4 py-3 text-[12.5px] leading-[1.8]" data-testid="satisfaction-formula">
-      <div className="font-bold text-ink">طريقة احتساب مؤشر رضا المستفيدين</div>
-      <div className="flex flex-wrap gap-1.5">
-        <Chip tone="success" size="sm">ممتاز = {w.excellent}</Chip>
-        <Chip tone="warning" size="sm">جيد = {w.good}</Chip>
-        <Chip tone="error" size="sm">سيئ = {w.bad}</Chip>
-        <Chip tone="neutral" size="sm">النسبة على أساس أعلى وزن = {max}</Chip>
-      </div>
-      <div className="text-muted">{b.formula}</div>
-      {c.total > 0 ? (
-        <div className="tabular text-ink" dir="rtl">
-          ({c.excellent} × {w.excellent} + {c.good} × {w.good} + {c.bad} × {w.bad}) ÷ ({c.total} × {max}) × 100 = {points} ÷ {c.total * max} × 100 ={' '}
-          <b>{fmtPct(b.value, 2)}</b>
-        </div>
-      ) : (
-        <div className="text-muted">لا توجد تقييمات من المستفيدين في هذه الفترة.</div>
-      )}
-    </div>
   );
 }
 

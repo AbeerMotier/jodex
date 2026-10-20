@@ -271,12 +271,10 @@ test('مؤشر رضا المستفيدين بالأوزان (60/30/10) في لو
   const { context, page } = await browserAs(browser, w.users.admin, at(D_FB, '18:00'));
   // فلتر المبنى في لوحة المؤشرات (تقييمات هذا اليوم في مبنى الاختبار كلها لدورة ج)
   await page.goto(`/admin?period=today&source=beneficiary&building=${w.building.id}`);
-  const formula = page.getByTestId('satisfaction-formula');
-  await expect(formula).toContainText('ممتاز = 60');
-  await expect(formula).toContainText('جيد = 30');
-  await expect(formula).toContainText('سيئ = 10');
-  await expect(formula).toContainText('(3 × 60 + 1 × 30 + 1 × 10) ÷ (5 × 60) × 100 = 220 ÷ 300 × 100');
-  await expect(formula).toContainText('73.33%');
+  // المؤشر يظهر في لوحة المؤشرات بالنسبة الموزونة، بلا صندوق طريقة الاحتساب (حُذف بطلب الجهة)
+  await expect(page.getByTestId('tile-beneficiary')).toContainText('مؤشر رضا المستفيدين');
+  await expect(page.getByTestId('tile-beneficiary')).toContainText('73%');
+  await expect(page.getByTestId('satisfaction-formula')).toHaveCount(0);
   await context.close();
 });
 
