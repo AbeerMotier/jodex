@@ -16,7 +16,14 @@ export const loginSchema = z.object({
   next: z.string().max(200).optional(),
 });
 
-export const normalizeUsername = (u: string) => u.trim().toLowerCase();
+/** علامات اتجاه ومحارف صفرية العرض تضيفها لوحات المفاتيح العربية أو النسخ من واتساب، لا تُرى ولا تُكتب عمدًا */
+const INVISIBLE_MARKS = /[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
+export const stripInvisible = (s: string) => s.replace(INVISIBLE_MARKS, '');
+
+export const normalizeUsername = (u: string) => stripInvisible(u).trim().toLowerCase();
+
+/** كلمة المرور كما يُحتمل أن المقصود بها: بلا محارف خفية ولا مسافات في طرفيها (نسخ ولصق) */
+export const cleanPassword = (p: string) => stripInvisible(p).trim();
 
 // ---------------------------------------------------------------------
 // تقييم المستفيد
@@ -262,9 +269,14 @@ export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
 export const passwordSetSchema = z.object({
   password: z
     .string()
-    .min(8, 'كلمة المرور 8 أحرف على الأقل.')
-    .max(72, 'كلمة المرور طويلة جدًا.')
-    .refine((v) => !/\s/.test(v), 'كلمة المرور بلا مسافات.')
+    .transform(stripInvisible)
+    .pipe(
+      z
+        .string()
+        .min(8, 'كلمة المرور 8 أحرف على الأقل.')
+        .max(72, 'كلمة المرور طويلة جدًا.')
+        .refine((v) => !/\s/.test(v), 'كلمة المرور بلا مسافات.'),
+    )
     .optional(),
 });
 

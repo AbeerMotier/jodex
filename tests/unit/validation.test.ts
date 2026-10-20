@@ -3,7 +3,10 @@ import {
   evaluationIssues,
   evaluationSubmitSchema,
   feedbackSchema,
+  cleanPassword,
   loginSchema,
+  normalizeUsername,
+  passwordSetSchema,
   roundSubmissionIssues,
   settingsSaveSchema,
 } from '@/lib/domain/validation';
@@ -44,6 +47,16 @@ describe('تسجيل الدخول', () => {
     const r = loginSchema.safeParse({ username: '  ', password: '' });
     expect(r.success).toBe(false);
     expect(r.error?.issues[0].message).toBe('أدخل اسم المستخدم وكلمة المرور.');
+  });
+
+  it('اسم مستخدم ملصوق مع علامة اتجاه خفية أو بحروف كبيرة يُطابق الحساب', () => {
+    expect(normalizeUsername('\u200Fa.alghamdi')).toBe('a.alghamdi');
+    expect(normalizeUsername(' A.Alnahhas\u200E ')).toBe('a.alnahhas');
+  });
+
+  it('كلمة مرور منسوخة من واتساب: تُزال المحارف الخفية والمسافات الطرفية', () => {
+    expect(cleanPassword('\u200FJx-MYduoMo6SD-48 ')).toBe('Jx-MYduoMo6SD-48');
+    expect(passwordSetSchema.parse({ password: '\u202BAbc-12345\u202C' }).password).toBe('Abc-12345');
   });
 });
 

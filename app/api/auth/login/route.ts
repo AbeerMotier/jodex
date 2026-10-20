@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { ROLE_HOME, ROLE_LABEL, type Role } from '@/lib/domain/catalog';
-import { LOGIN_INVALID_MESSAGE, loginSchema, normalizeUsername } from '@/lib/domain/validation';
+import { cleanPassword, LOGIN_INVALID_MESSAGE, loginSchema, normalizeUsername } from '@/lib/domain/validation';
 import { audit } from '@/lib/server/audit';
 import { firstName } from '@/lib/server/auth';
 import { ApiError, clientIp, errorResponse, json, parseJson, verifyCsrf } from '@/lib/server/http';
@@ -84,7 +84,12 @@ export async function POST(req: NextRequest) {
           'الحساب موجود لكن بياناته في Supabase Auth ناقصة. شغّل supabase/repair-login.sql ثم أعد المحاولة.',
         );
       }
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password: body.password });
+      let { data, error } = await supabase.auth.signInWithPassword({ email, password: body.password });
+      // لُصقت كلمة المرور مع مسافة أو علامة اتجاه خفية (من واتساب مثلًا) ← محاولة ثانية بالنص المنظّف
+      const cleaned = cleanPassword(body.password);
+      if (error?.code === 'invalid_credentials' && cleaned && cleaned !== body.password) {
+        ({ data, error } = await supabase.auth.signInWithPassword({ email, password: cleaned }));
+      }
       success = !error && Boolean(data.session);
       if (error && error.code !== 'invalid_credentials') {
         // خطأ من خدمة الدخول نفسها (حساب تالف، مزوّد Email معطّل، مفتاح عام خاطئ…)
