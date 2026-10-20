@@ -308,7 +308,7 @@ function SatisfactionFormula({ b }: { b: NonNullable<DashboardData['quality']['b
       {c.total > 0 ? (
         <div className="tabular text-ink" dir="rtl">
           ({c.excellent} × {w.excellent} + {c.good} × {w.good} + {c.bad} × {w.bad}) ÷ ({c.total} × {max}) × 100 = {points} ÷ {c.total * max} × 100 ={' '}
-          <b>{fmtPct(b.value)}</b>
+          <b>{fmtPct(b.value, 2)}</b>
         </div>
       ) : (
         <div className="text-muted">لا توجد تقييمات من المستفيدين في هذه الفترة.</div>
