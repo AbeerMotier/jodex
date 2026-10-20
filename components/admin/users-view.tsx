@@ -378,7 +378,7 @@ function UserDialog({
           </select>
         </Field>
         {role === 'admin' && (
-          <Field label="صلاحيات الأدمن" error={errors.adminScope} hint="المقيّد يطّلع ويعدّل ويضيف الحسابات، والمطّلع يرى كل النظام بلا تعديل أو إضافة أو حذف.">
+          <Field label="صلاحيات الأدمن" error={errors.adminScope} hint="الأدمن الفرعي إما بصلاحية التعديل وإضافة الحسابات، أو بصلاحية العرض فقط بلا تعديل أو إضافة أو حذف.">
             <select value={adminScope} onChange={(e) => setAdminScope(e.target.value as AdminScope)} className={INPUT} data-testid="user-admin-scope">
               {((canGrantSuper ? ['super', 'restricted', 'viewer'] : ['restricted', 'viewer']) as AdminScope[]).map((s) => (
                 <option key={s} value={s}>

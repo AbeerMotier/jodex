@@ -45,7 +45,7 @@ test('المطّلع (سلطان الجبالي وإيهاب سمارن): يرى
 
   const { context, page } = await browserAs(browser, w.users.lim, null);
   await page.goto('/admin');
-  await expect(page.getByTestId('admin-scope')).toHaveText('مطّلع');
+  await expect(page.getByTestId('admin-scope')).toHaveText('أدمن فرعي');
   const nav = page.getByTestId('admin-sidebar');
   await expect(nav.getByRole('link', { name: 'المستخدمون والصلاحيات' })).toBeVisible();
   await page.goto('/admin/users');

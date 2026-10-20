@@ -20,11 +20,12 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export const ADMIN_SCOPE_LABEL: Record<AdminScope, string> = {
-  super: 'الأدمن الرئيسي — كل النظام وكل الحسابات',
-  restricted: 'أدمن مقيّد — اطلاع وتعديل وإضافة حسابات',
-  viewer: 'مطّلع — عرض فقط بلا تعديل',
+  super: 'أدمن أساسي — كل النظام وكل الحسابات',
+  restricted: 'أدمن فرعي — اطلاع وتعديل وإضافة حسابات',
+  viewer: 'أدمن فرعي — عرض فقط بلا تعديل',
 };
-export const ADMIN_SCOPE_SHORT: Record<AdminScope, string> = { super: 'أدمن رئيسي', restricted: 'أدمن مقيّد', viewer: 'مطّلع' };
+/** المسميات المعروضة: «أدمن أساسي» و«أدمن فرعي» فقط (الفرق في الصلاحية يظهر في الوصف) */
+export const ADMIN_SCOPE_SHORT: Record<AdminScope, string> = { super: 'أدمن أساسي', restricted: 'أدمن فرعي', viewer: 'أدمن فرعي' };
 
 export const ROLE_HOME: Record<Role, string> = {
   admin: '/admin',
