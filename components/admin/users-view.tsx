@@ -60,16 +60,6 @@ function assignable(u: UserView) {
   return u.role === 'supervisor' || u.role === 'contractor' || (u.role === 'contractor_monitor' && u.monitorKind === 'primary');
 }
 
-function detailText(u: UserView) {
-  if (u.role === 'contractor_monitor') {
-    if (u.monitorKind === 'substitute') return `نائب عن ${u.substituteForName ?? '—'}`;
-    return u.restroomIds.length ? `مسؤول عن ${u.restroomIds.length} دورة مياه` : 'لا توجد دورات مياه مسندة';
-  }
-  if (u.role === 'supervisor') return u.restroomIds.length ? `يقيّم ${u.restroomIds.length} موقعًا` : 'لا توجد مواقع مسندة';
-  if (u.role === 'contractor') return u.restroomIds.length ? `${u.restroomIds.length} دورة مياه مسندة (عرض فقط)` : 'لا توجد دورات مياه مسندة';
-  return u.adminScope ? ADMIN_SCOPE_LABEL[u.adminScope] : '—';
-}
-
 export function UsersView() {
   const toast = useToast();
   const access = useAdminAccess();
@@ -168,10 +158,9 @@ export function UsersView() {
       {data && (
         <div className="animate-fade-up overflow-x-auto rounded-[18px] border border-line bg-white" data-testid="users-table">
           <div className="min-w-[760px]">
-            <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_90px_minmax(270px,auto)] gap-3 bg-[#F6F9F7] px-[18px] py-3 text-[12.5px] font-semibold text-ink-2">
+            <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_90px_minmax(270px,auto)] gap-3 bg-[#F6F9F7] px-[18px] py-3 text-[12.5px] font-semibold text-ink-2">
               <span>الموظف</span>
               <span>الدور</span>
-              <span>الإسناد</span>
               <span>الحالة</span>
               <span>إجراءات</span>
             </div>
@@ -179,7 +168,7 @@ export function UsersView() {
             {list.map((u) => (
               <div
                 key={u.id}
-                className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_90px_minmax(270px,auto)] items-center gap-3 border-t border-divider px-[18px] py-3 text-[13.5px]"
+                className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_90px_minmax(270px,auto)] items-center gap-3 border-t border-divider px-[18px] py-3 text-[13.5px]"
                 data-testid={`user-row-${u.username}`}
                 style={u.isActive ? undefined : { opacity: 0.6 }}
               >
@@ -204,7 +193,6 @@ export function UsersView() {
                     </Chip>
                   )}
                 </span>
-                <span className="text-[12.5px] text-muted">{detailText(u)}</span>
                 <span>
                   <Chip tone={u.isActive ? 'success' : 'error'} size="sm" dot>
                     {u.isActive ? 'نشط' : 'معطّل'}

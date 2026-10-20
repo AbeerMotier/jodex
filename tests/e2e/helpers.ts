@@ -110,11 +110,14 @@ export function roundOf(data: TodayData, shift: 'am' | 'pm'): TodayRound {
 export async function uploadRequiredPhotos(api: Api, roundId: string, slots: readonly string[] = REQUIRED_SLOTS) {
   let i = 0;
   for (const slot of slots) {
-    // «العمالة»: التقاط مباشر من الكاميرا في الصفحة (source=camera وبلا EXIF)
-    const res =
-      slot === 'labor'
-        ? await api.upload(`/api/monitor/rounds/${roundId}/photos/${slot}`, await cameraJpeg(i++), 'photo.jpg', 'image/jpeg', { source: 'camera' })
-        : await api.upload(`/api/monitor/rounds/${roundId}/photos/${slot}`, await jpegWithGps(i++));
+    // كل صور الجولة التقاط مباشر من الكاميرا في الصفحة (source=camera)؛ صورة بموقع GPS بلا تاريخ التقاط قديم مقبولة وتُزال بياناتها
+    const res = await api.upload(
+      `/api/monitor/rounds/${roundId}/photos/${slot}`,
+      slot === 'labor' ? await cameraJpeg(i++) : await jpegWithGps(i++),
+      'photo.jpg',
+      'image/jpeg',
+      { source: 'camera' },
+    );
     expect(res.status(), await res.text()).toBe(200);
   }
 }

@@ -177,6 +177,10 @@ test('نوافذ الجولات: الصباحية 07:30–10:00 والمسائي
   await expect(page.getByTestId('round-window-closed')).toContainText('07:30');
   await expect(page.getByTestId('round-window-closed')).toContainText('10:00');
   await expect(page.getByTestId('submit-round')).toHaveCount(0);
+  // البنود والمرفقات ظاهرة للاطلاع خارج وقت الجولة (بلا أزرار إجابة)
+  await expect(page.getByTestId('round-preview')).toContainText('هيئة العامل');
+  await expect(page.getByTestId('round-preview')).toContainText('العمالة');
+  await expect(page.getByTestId('round-preview').locator('[data-answer]')).toHaveCount(0);
   await expect(page.getByTestId('shift-window-pm')).toHaveText('12:00–14:30');
   await context.close();
 });
@@ -226,7 +230,7 @@ test('صورة العمالة إلزامية وبالكاميرا فقط: الخ
   const labor = page.getByTestId('photo-labor');
   await expect(labor).toContainText('التقاط بالكاميرا');
   await expect(page.getByTestId('photo-input-labor')).toHaveCount(0);
-  await expect(page.getByTestId('photo-input-tools')).toHaveCount(1);
+  await expect(page.getByTestId('photo-input-tools')).toHaveCount(0);
   await labor.getByTestId('photo-camera-labor').click();
   const guide = page.getByTestId('camera-guide');
   await expect(guide).toContainText('عموديًا');
@@ -427,15 +431,13 @@ test('صفحة المشرف: الموقع محدد بالمسح وللعرض ف�
   await expect(page.getByTestId('scan-prompt')).toBeVisible();
   await expect(page.getByTestId('submit-evaluation')).toHaveCount(0);
   await expect(page.getByTestId('scan-site')).toHaveCount(0);
-  await expect(page.getByTestId('remaining-sites')).toContainText('المواقع المتبقية لتقييمها اليوم');
-  await page.getByTestId('assigned-sites').locator('summary').click();
-  await expect(page.getByTestId('assigned-sites')).toContainText(w.rooms.a.code);
-  // فتح الموقع من رمز QR (الترميز) ← جدول الموقع للعرض والتقييم
-  await page.goto(`/go/${w.rooms.b.code}`);
+  await expect(page.getByTestId('remaining-sites')).toHaveCount(0);
+  await expect(page.getByTestId('assigned-sites')).toHaveCount(0);
+  // فتح الموقع من رمز QR (رابط بالترميز) ← تفاصيل الموقع في الرأس والتقييم مباشرة
+  await page.goto(`/r/${w.rooms.b.code}`);
   await page.waitForURL(/\/supervisor\?restroom=/);
-  const site = page.getByTestId('site-table');
-  await expect(site).toContainText(w.rooms.b.code);
-  await expect(site.locator('button, a, select, input')).toHaveCount(0);
+  await expect(page.getByTestId('site-code')).toHaveText(w.rooms.b.code);
+  await expect(page.getByTestId('site-card')).toHaveCount(0);
   await expect(page.getByText('هل جولة المراقب المسجّلة مطابقة للواقع؟')).toBeVisible();
   await expect(page.getByText('هل يحتاج الموقع معالجة فورية؟')).toBeVisible();
   await expect(page.getByText('ملاحظات المشرف الميداني')).toBeVisible();

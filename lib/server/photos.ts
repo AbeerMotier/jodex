@@ -26,7 +26,7 @@ export const PHOTO_ERRORS = {
   type: 'نوع الملف غير مسموح. الأنواع المسموحة: JPEG وPNG وWebP وHEIC.',
   corrupt: 'تعذّر قراءة الصورة. جرّب صورة أخرى.',
   upload: 'تعذّر حفظ الصورة. أعد رفع الخانة.',
-  cameraOnly: 'صورة العمالة تُلتقط مباشرة بالكاميرا من داخل الصفحة، ولا يُقبل رفع صورة محفوظة على الجهاز.',
+  cameraOnly: 'صور الجولة تُلتقط مباشرة بالكاميرا من داخل الصفحة، ولا يُقبل رفع صورة محفوظة على الجهاز.',
 } as const;
 
 /** قراءة ملف الصورة من طلب multipart مع التحقق من الحجم قبل القراءة */
@@ -64,7 +64,8 @@ export async function assertFreshCapture(input: Buffer, source: string | null, n
   if (source !== 'camera') throw new ApiError(422, 'camera_only', PHOTO_ERRORS.cameraOnly);
   const { fileTypeFromBuffer } = await import('file-type');
   const type = await fileTypeFromBuffer(input);
-  if (!type || !['image/jpeg', 'image/png', 'image/webp'].includes(type.mime)) throw new ApiError(422, 'camera_only', PHOTO_ERRORS.cameraOnly);
+  if (!type || !ACCEPTED.has(type.mime)) throw new ApiError(415, 'unsupported_type', PHOTO_ERRORS.type);
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(type.mime)) throw new ApiError(422, 'camera_only', PHOTO_ERRORS.cameraOnly);
   let exif: Buffer | undefined;
   try {
     exif = (await sharp(input).metadata()).exif;

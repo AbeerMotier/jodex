@@ -207,17 +207,17 @@ test('المسودة والجولة pending لا تُحتسب، والصور ت�
     expect(p.mime).toBe('image/jpeg');
   }
   // ملف ليس صورة (بامتداد صورة) يُرفض بالبصمة الثنائية
-  const fake = await m1.upload(`/api/monitor/rounds/${am.id}/photos/entry`, Buffer.from('%PDF-1.4 not an image'), 'fake.jpg');
+  const fake = await m1.upload(`/api/monitor/rounds/${am.id}/photos/entry`, Buffer.from('%PDF-1.4 not an image'), 'fake.jpg', 'image/jpeg', { source: 'camera' });
   expect(fake.status()).toBe(415);
 });
 
 test('المتصفح: المراقب يعبّئ الجولة ويرفع صورًا حقيقية ويرسل ← تظهر في السجل بحالة التزام صحيحة', async ({ browser }) => {
   const w = world();
   const date = '2042-01-22';
-  // صورة العمالة تُلتقط بالكاميرا داخل الصفحة (مختبرة بكاميرا وهمية في client-requirements.spec)؛ هنا تُرفع كالتقاط مباشر
+  // كل الصور تُلتقط بالكاميرا داخل الصفحة (مختبرة بكاميرا وهمية في client-requirements.spec)؛ هنا تُرفع كالتقاط مباشر
   m1.at = at(date, '09:05');
   const today = await monitorToday(m1);
-  await uploadRequiredPhotos(m1, roundOf(today, 'am').id, ['labor']);
+  await uploadRequiredPhotos(m1, roundOf(today, 'am').id);
   const s = await browserAs(browser, w.users.m1, at(date, '09:10'), { width: 390, height: 844 });
   try {
     const page = s.page;
@@ -227,11 +227,8 @@ test('المتصفح: المراقب يعبّئ الجولة ويرفع صورً
     expect(await groups.count()).toBeGreaterThan(0);
     for (const group of await groups.all()) await group.locator('[data-answer="done"]').click();
     await expect(page.getByTestId('items-progress')).toHaveText(/^(\d+) من \1$/);
-    let i = 0;
-    await expect(page.getByTestId('photo-input-labor')).toHaveCount(0);
-    for (const slot of REQUIRED_SLOTS.filter((x) => x !== 'labor')) {
-      await page.getByTestId(`photo-input-${slot}`).setInputFiles({ name: `${slot}.jpg`, mimeType: 'image/jpeg', buffer: await jpegWithGps(i++) });
-    }
+    // لا رفع ملفات من الجهاز لأي خانة
+    for (const slot of REQUIRED_SLOTS) await expect(page.getByTestId(`photo-input-${slot}`)).toHaveCount(0);
     await expect(page.getByTestId('photos-progress')).toHaveText('5 من 5 صور إلزامية', { timeout: 30_000 });
     await page.getByTestId('submit-round').click();
     await expect(page.getByTestId('success-dialog')).toBeVisible();

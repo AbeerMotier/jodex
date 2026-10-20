@@ -296,7 +296,14 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
               <InfoTile label="المبنى" value={site.building} />
               <InfoTile label="الدور" value={site.floor} />
               <InfoTile label="دورة المياه" value={site.name} />
-              <InfoTile label="ترميز دورة المياه" value={<span dir="ltr" className="tabular">{site.code}</span>} />
+              <InfoTile
+                label="ترميز دورة المياه"
+                value={
+                  <span dir="ltr" className="tabular" data-testid="site-code">
+                    {site.code}
+                  </span>
+                }
+              />
               <InfoTile label="التاريخ" value={dayLabel(data.today)} />
               <InfoTile label="الوقت" value={<span className="tabular">{timeHM(now)}</span>} />
             </div>
@@ -304,105 +311,12 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
         </div>
       </GreenHero>
 
-      <Card className="flex flex-col gap-3 p-[18px]" data-testid="site-card">
-        <h2 className="m-0 text-[15px] font-bold">الموقع المراد تقييمه</h2>
-        {site ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] border-collapse text-right text-[13.5px]" data-testid="site-table">
-              <thead>
-                <tr className="text-[12px] text-muted">
-                  <th className="py-1.5 font-semibold">المبنى</th>
-                  <th className="py-1.5 font-semibold">الدور</th>
-                  <th className="py-1.5 font-semibold">دورة المياه</th>
-                  <th className="py-1.5 font-semibold">ترميز دورة المياه</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-t border-divider">
-                  <td className="py-2">{site.building}</td>
-                  <td className="py-2">{site.floor}</td>
-                  <td className="py-2 font-semibold">{site.name}</td>
-                  <td className="py-2">
-                    <span dir="ltr" className="tabular">
-                      {site.code}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="rounded-[12px] bg-[#F6F9F7] px-3.5 py-3 text-[13.5px] leading-[1.7] text-ink-2" data-testid="scan-prompt">
-            امسح رمز QR الملصق على دورة المياه بكاميرا الجوال لفتح تقييمها. لا يمكن اختيار الموقع من القائمة.
-          </div>
-        )}
-        <details className="text-[13px]" data-testid="remaining-sites">
-          <summary className="cursor-pointer font-semibold text-ink-2">
-            المواقع المتبقية لتقييمها اليوم ({data.sites.filter((s) => !s.lastSubmittedAt).length} من {data.sites.length}) — اضغط للعرض
-          </summary>
-          <div className="mt-2 max-h-[300px] overflow-auto rounded-[10px] border border-line">
-            {data.sites.every((s) => s.lastSubmittedAt) ? (
-              <div className="px-3 py-3 text-center text-muted">قيّمت كل المواقع المسندة إليك اليوم ✓</div>
-            ) : (
-              <table className="w-full min-w-[480px] border-collapse text-right text-[12.5px]">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="text-muted">
-                    <th className="px-3 py-1.5 font-semibold">المبنى</th>
-                    <th className="px-3 py-1.5 font-semibold">الدور</th>
-                    <th className="px-3 py-1.5 font-semibold">دورة المياه</th>
-                    <th className="px-3 py-1.5 font-semibold">ترميز دورة المياه</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.sites
-                    .filter((s) => !s.lastSubmittedAt)
-                    .map((s) => (
-                      <tr key={s.id} className="border-t border-divider">
-                        <td className="px-3 py-1.5">{s.building}</td>
-                        <td className="px-3 py-1.5">{s.floor}</td>
-                        <td className="px-3 py-1.5">{s.name}</td>
-                        <td className="px-3 py-1.5">
-                          <span dir="ltr" className="tabular">
-                            {s.code}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </details>
-        <details className="text-[13px]" data-testid="assigned-sites">
-          <summary className="cursor-pointer font-semibold text-ink-2">المواقع المسندة إليك ({data.sites.length}) — للاطلاع فقط، اضغط للعرض</summary>
-          <div className="mt-2 max-h-[300px] overflow-auto rounded-[10px] border border-line">
-            <table className="w-full min-w-[480px] border-collapse text-right text-[12.5px]">
-              <thead className="sticky top-0 bg-white">
-                <tr className="text-muted">
-                  <th className="px-3 py-1.5 font-semibold">المبنى</th>
-                  <th className="px-3 py-1.5 font-semibold">الدور</th>
-                  <th className="px-3 py-1.5 font-semibold">دورة المياه</th>
-                  <th className="px-3 py-1.5 font-semibold">ترميز دورة المياه</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.sites.map((s) => (
-                  <tr key={s.id} className="border-t border-divider" style={s.id === siteId ? { background: '#E6F2EA' } : undefined}>
-                    <td className="px-3 py-1.5">{s.building}</td>
-                    <td className="px-3 py-1.5">{s.floor}</td>
-                    <td className="px-3 py-1.5">{s.name}</td>
-                    <td className="px-3 py-1.5">
-                      <span dir="ltr" className="tabular">
-                        {s.code}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      </Card>
+      {/* الموقع يُحدد بمسح رمز دورة المياه بكاميرا الجوال (لا اختيار من قائمة)، وتفاصيله في الرأس أعلاه */}
+      {!site && (
+        <Card className="p-[18px] text-[14px] leading-[1.8] text-ink-2" data-testid="scan-prompt">
+          امسح رمز QR الملصق على دورة المياه بكاميرا الجوال لفتح تقييمها.
+        </Card>
+      )}
 
       {!siteId ? null : evalLoading || !evaluation ? (
         <SkeletonCard lines={6} />

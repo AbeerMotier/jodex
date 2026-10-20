@@ -182,7 +182,7 @@ test('مسح QR ثم دخول الموظف يفتح صفحة دوره على د�
     await page.goto(`/go/${w.rooms.b.token}`);
     await page.waitForURL(/\/supervisor\?restroom=/);
     expect(new URL(page.url()).searchParams.get('restroom')).toBe(w.rooms.b.id);
-    await expect(page.getByTestId('site-table')).toContainText(w.rooms.b.code);
+    await expect(page.getByTestId('site-code')).toHaveText(w.rooms.b.code);
     await expect(page.getByTestId('site-select')).toHaveCount(0);
     await closeAll(context);
   }

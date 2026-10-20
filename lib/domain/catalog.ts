@@ -71,14 +71,14 @@ export const BADGE_STATUS: Record<BadgeState, { label: string; tone: Tone }> = {
 export type PhotoSlot = 'tools' | 'entry' | 'sinks' | 'toilets' | 'general' | 'labor';
 
 /**
- * مرفقات الجولة الحالية. «المراحيض» أُزيلت بطلب الجهة (تبقى تسميتها لعرض الجولات السابقة فقط)،
- * و«العمالة» إلزامية وتُلتقط بالكاميرا مباشرة (cameraOnly) دون رفع صورة محفوظة.
+ * مرفقات الجولة الحالية: كلها إلزامية وتُلتقط بالكاميرا مباشرة وقت الجولة (cameraOnly) دون رفع صور محفوظة.
+ * «المراحيض» أُزيلت بطلب الجهة (تبقى تسميتها لعرض الجولات السابقة فقط).
  */
 export const PHOTO_SLOTS: { slot: PhotoSlot; label: string; required: boolean; cameraOnly?: boolean }[] = [
-  { slot: 'tools', label: 'الأدوات المستخدمة', required: true },
-  { slot: 'entry', label: 'المدخل', required: true },
-  { slot: 'sinks', label: 'المغاسل', required: true },
-  { slot: 'general', label: 'الوضع العام لدورة المياه', required: true },
+  { slot: 'tools', label: 'الأدوات المستخدمة', required: true, cameraOnly: true },
+  { slot: 'entry', label: 'المدخل', required: true, cameraOnly: true },
+  { slot: 'sinks', label: 'المغاسل', required: true, cameraOnly: true },
+  { slot: 'general', label: 'الوضع العام لدورة المياه', required: true, cameraOnly: true },
   { slot: 'labor', label: 'العمالة', required: true, cameraOnly: true },
 ];
 export const REQUIRED_PHOTO_SLOTS = PHOTO_SLOTS.filter((s) => s.required).map((s) => s.slot);

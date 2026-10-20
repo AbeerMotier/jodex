@@ -1,5 +1,5 @@
 import 'server-only';
-import { FEEDBACK_RATING_LABEL, PERIOD_LABEL, SATISFACTION_FORMULA, SEVERITY_LABEL, SOURCE_LABEL, type Source } from '@/lib/domain/catalog';
+import { FEEDBACK_RATING_LABEL, PERIOD_LABEL, SATISFACTION_FORMULA, SOURCE_LABEL, type Source } from '@/lib/domain/catalog';
 import { dayLabel, fmtPct, instantDate, instantDayLabel, timeHM } from '@/lib/domain/format';
 import type { SessionUser } from '../auth';
 import { audit } from '../audit';
@@ -252,10 +252,9 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
         meta,
         subtitle: 'ملاحظات المشرفين الميدانيين (للاطلاع)',
         pdfBody: table(
-          ['الملاحظة', 'الأهمية', 'الموقع', 'ترميز دورة المياه', 'المشرف الميداني', 'التاريخ والوقت', 'الصور'],
+          ['الملاحظة', 'الموقع', 'ترميز دورة المياه', 'المشرف الميداني', 'التاريخ والوقت', 'الصور'],
           data.rows.map((n) => [
             n.text,
-            chip(SEVERITY_LABEL[n.severity], n.severity === 'high' ? 'error' : n.severity === 'mid' ? 'warning' : 'success'),
             `${n.restroom.name} · ${n.restroom.floor} · ${n.restroom.building}`,
             { html: `<span dir="ltr">${esc(n.restroom.code)}</span>` },
             n.supervisor,
@@ -268,7 +267,6 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
             name: 'الملاحظات',
             columns: [
               { header: 'الملاحظة', width: 44 },
-              { header: 'الأهمية', width: 14 },
               { header: 'دورة المياه', width: 18 },
               { header: 'ترميز دورة المياه', width: 26 },
               { header: 'الدور', width: 14 },
@@ -278,7 +276,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
               { header: 'الوقت', width: 8 },
               { header: 'عدد الصور', width: 10 },
             ],
-            rows: data.rows.map((n) => [n.text, SEVERITY_LABEL[n.severity], n.restroom.name, n.restroom.code, n.restroom.floor, n.restroom.building, n.supervisor, instantDate(n.createdAt), timeHM(n.createdAt), n.photos.length]),
+            rows: data.rows.map((n) => [n.text, n.restroom.name, n.restroom.code, n.restroom.floor, n.restroom.building, n.supervisor, instantDate(n.createdAt), timeHM(n.createdAt), n.photos.length]),
           },
         ],
       };

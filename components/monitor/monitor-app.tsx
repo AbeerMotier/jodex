@@ -427,6 +427,11 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
         </Card>
       )}
 
+      {/* البنود والمرفقات ظاهرة دائمًا للاطلاع خارج وقت الجولة (بلا إجابة أو تصوير) */}
+      {round && round.status !== 'submitted' && (round.status === 'missed' || windowState !== 'open') && (
+        <RoundPreview items={data.items.contractor} slots={data.photoSlots} />
+      )}
+
       {round && round.status === 'pending' && windowState === 'open' && form && (
         <>
           <Card className="px-[18px] pt-1.5 pb-1">
@@ -462,7 +467,7 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
                 {uploadedRequired} من {requiredSlots.length} صور إلزامية
               </span>
             </div>
-            <div className="mb-3.5 text-[13px] text-muted">التقط الصورة بالكاميرا أو اخترها من الجهاز، ويمكنك معاينتها أو استبدالها أو حذفها قبل الإرسال. صورة العمالة تُلتقط مباشرة بالكاميرا فقط.</div>
+            <div className="mb-3.5 text-[13px] text-muted">كل الصور إلزامية وتُلتقط مباشرة بالكاميرا الآن (لا يُقبل رفع صورة محفوظة)، ويمكنك معاينتها أو إعادة التقاطها أو حذفها قبل الإرسال.</div>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
               {data.photoSlots.map((s) => {
                 const key = `${round.id}:${s.slot}`;
@@ -527,6 +532,7 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
       <CameraCapture
         open={Boolean(cameraSlot)}
         title={`صورة ${cameraSlot?.label ?? ''}`}
+        worker={cameraSlot?.slot === 'labor'}
         onClose={() => setCameraSlot(null)}
         onCapture={(blob) => {
           const slot = cameraSlot?.slot;
@@ -537,6 +543,36 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
       <SuccessDialog open={Boolean(success)} title={success?.title ?? ''} sub={success?.sub ?? ''} meta={success?.meta} onClose={() => setSuccess(null)} />
       <Lightbox src={lightbox} onClose={() => setLightbox(null)} alt="صورة الجولة" />
     </main>
+  );
+}
+
+/** بنود الجولة ومرفقاتها للاطلاع فقط خارج وقت الجولة */
+function RoundPreview({ items, slots }: { items: { id: string; title: string; description: string | null }[]; slots: { slot: PhotoSlot; label: string; required: boolean }[] }) {
+  return (
+    <Card className="flex flex-col gap-3 p-[18px] opacity-90" data-testid="round-preview">
+      <div className="flex items-center justify-between">
+        <h2 className="m-0 text-[17px] font-bold">بنود الجولة</h2>
+        <Chip tone="neutral" size="sm">
+          للاطلاع
+        </Chip>
+      </div>
+      <ul className="m-0 flex list-none flex-col p-0">
+        {items.map((i) => (
+          <li key={i.id} className="border-t border-divider py-2.5 text-[14.5px] font-semibold" data-testid="preview-item">
+            {i.title}
+            {i.description && <div className="text-[12.5px] font-normal text-muted">{i.description}</div>}
+          </li>
+        ))}
+      </ul>
+      <h2 className="m-0 mt-1 text-[17px] font-bold">مرفقات الجولة</h2>
+      <div className="flex flex-wrap gap-1.5">
+        {slots.map((s) => (
+          <Chip key={s.slot} tone="neutral" size="sm">
+            📷 {s.label} · إلزامي
+          </Chip>
+        ))}
+      </div>
+    </Card>
   );
 }
 

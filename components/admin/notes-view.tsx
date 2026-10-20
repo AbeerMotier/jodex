@@ -1,10 +1,10 @@
 'use client';
 import { useState } from 'react';
-import { Chip, RoleChip } from '@/components/ui/chip';
+import { RoleChip } from '@/components/ui/chip';
 import { Lightbox } from '@/components/ui/overlay';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePaged } from '@/lib/client/use-paged';
-import { PERIOD_LABEL, SEVERITY_LABEL } from '@/lib/domain/catalog';
+import { PERIOD_LABEL } from '@/lib/domain/catalog';
 import { instantDayLabel, timeHM } from '@/lib/domain/format';
 import type { NoteSeverity } from '@/lib/domain/scoring';
 import type { Period } from '@/lib/domain/time';
@@ -24,13 +24,12 @@ interface Row {
 }
 
 const PERIODS: Period[] = ['today', 'week', 'month'];
-const SEVERITY_TONE = { high: 'error', mid: 'warning', low: 'success' } as const;
 
 /** ملاحظات المشرفين الميدانيين — للاطلاع فقط (سير عمل الإجراءات التصحيحية غير معرّف بعد) */
 export function NotesView() {
   const f = useUrlFilters();
   const options = useFilterOptions();
-  const apiQuery = f.query(['building', 'floor', 'restroom', 'supervisor', 'severity']);
+  const apiQuery = f.query(['building', 'floor', 'restroom', 'supervisor']);
   const { rows, total, hasMore, loading, loadingMore, error, more, reload } = usePaged<Row>(`/api/admin/notes?${apiQuery}`);
   const [lightbox, setLightbox] = useState<string | null>(null);
 
@@ -39,7 +38,6 @@ export function NotesView() {
     f.get('floor'),
     f.get('restroom') && options?.restrooms.find((r) => r.id === f.get('restroom'))?.code,
     f.get('supervisor') && options?.supervisors.find((s) => s.id === f.get('supervisor'))?.name,
-    f.get('severity') && SEVERITY_LABEL[f.get('severity') as NoteSeverity],
   ].filter(Boolean) as string[];
 
   const filters = (
@@ -56,14 +54,7 @@ export function NotesView() {
         options={(options?.supervisors ?? []).map((s) => ({ value: s.id, label: s.name }))}
         placeholder="كل المشرفين"
       />
-      <SelectField
-        label="الأهمية"
-        testId="filter-severity"
-        value={f.get('severity')}
-        onChange={(v) => f.set({ severity: v })}
-        options={(['high', 'mid', 'low'] as NoteSeverity[]).map((s) => ({ value: s, label: SEVERITY_LABEL[s] }))}
-        placeholder="كل المستويات"
-      />
+
     </>
   );
 
@@ -74,7 +65,7 @@ export function NotesView() {
         sub={`${PERIOD_LABEL[f.period]} · ملاحظات المشرفين الميدانيين للاطلاع`}
         actions={<Toolbar filters={filters} activeCount={active.length} exportUrl={(format) => `/api/admin/export?report=notes&format=${format}&${apiQuery}`} exportName="jodex-notes" />}
       />
-      <ActiveFilters items={active} onClear={() => f.set({ building: null, floor: null, restroom: null, supervisor: null, severity: null })} />
+      <ActiveFilters items={active} onClear={() => f.set({ building: null, floor: null, restroom: null, supervisor: null })} />
       <div className="flex flex-col gap-3" data-testid="notes-list">
         {loading && Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[98px] rounded-[18px]" />)}
         {!loading && error && (
@@ -94,9 +85,6 @@ export function NotesView() {
               <div className="flex min-w-0 flex-[1_1_280px] flex-col gap-1.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[15px] font-bold">{n.text}</span>
-                  <Chip tone={SEVERITY_TONE[n.severity]} size="sm">
-                    {SEVERITY_LABEL[n.severity]}
-                  </Chip>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
                   <span>

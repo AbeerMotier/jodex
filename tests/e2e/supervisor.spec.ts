@@ -121,7 +121,7 @@ test('واجهة المشرف: أزرار المطابقة معطلة قبل «�
     await expect(page.getByTestId('site-select')).toHaveCount(0);
     await page.goto(`/go/${w.rooms.b.code}`);
     await page.waitForURL(/\/supervisor\?restroom=/);
-    await expect(page.getByTestId('site-table')).toContainText(w.rooms.b.code);
+    await expect(page.getByTestId('site-code')).toHaveText(w.rooms.b.code);
     await expect(page.getByTestId('match-yes')).toBeDisabled();
     for (const row of await page.locator('[data-testid^="rate-item-"]').all()) await row.locator('[data-rating="5"]').click();
     await page.getByTestId('open-verification').click();

@@ -5,11 +5,17 @@ import { averageBrightness, CAMERA_ERROR_MESSAGE, grabFrame, useCameraStream } f
 
 const DARK_THRESHOLD = 60;
 
-const TIPS = [
+const LABOR_TIPS = [
   'أمسك الجوال عموديًا (طوليًا) وصوّر العامل بكامل هيئته من الرأس إلى القدمين.',
   'صوّر في مكان جيد الإضاءة، ولا تجعل مصدر الضوء أو النافذة خلف العامل.',
   'ثبّت يدك حتى تكون الصورة واضحة غير مهتزة، وعلى مسافة مترين تقريبًا.',
   'يظهر الزي الرسمي وأدوات العمل بوضوح، ودورة المياه في الخلفية.',
+];
+const PLACE_TIPS = [
+  'أمسك الجوال عموديًا (طوليًا) واجعل المكان المطلوب كاملًا داخل الإطار.',
+  'صوّر في إضاءة جيدة، وشغّل إنارة دورة المياه إن كانت مطفأة.',
+  'ثبّت يدك حتى تكون الصورة واضحة غير مهتزة.',
+  'التقط الصورة الآن وقت الجولة؛ لا تُقبل صورة سابقة.',
 ];
 
 /** رسم توضيحي لصورة صحيحة/خاطئة (بلا صور خارجية) */
@@ -48,11 +54,14 @@ function Example({ kind }: { kind: 'good' | 'landscape' | 'dark' | 'blurry' }) {
 export function CameraCapture({
   open,
   title,
+  worker = false,
   onClose,
   onCapture,
 }: {
   open: boolean;
   title: string;
+  /** صورة العمالة: تعليمات تصوير العامل؛ وإلا تعليمات تصوير المكان */
+  worker?: boolean;
   onClose: () => void;
   onCapture: (blob: Blob) => void;
 }) {
@@ -107,7 +116,7 @@ export function CameraCapture({
         <div className="flex flex-col gap-3.5 pb-3" data-testid="camera-guide">
           <div className="text-[14px] font-bold">قبل التصوير: طريقة التقاط صورة صحيحة</div>
           <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[13.5px] leading-[1.7]">
-            {TIPS.map((t) => (
+            {(worker ? LABOR_TIPS : PLACE_TIPS).map((t) => (
               <li key={t} className="flex gap-2">
                 <span className="mt-[3px] flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full bg-ok-bg text-[11px] font-bold text-ok-ink" aria-hidden>
                   ✓
@@ -145,7 +154,7 @@ export function CameraCapture({
               {!ready && <span className="absolute inset-0 flex items-center justify-center text-[13px] text-white">جارٍ تشغيل الكاميرا…</span>}
             </div>
           )}
-          <div className="text-center text-[12.5px] text-muted">اجعل العامل داخل الإطار والجوال عموديًا.</div>
+          <div className="text-center text-[12.5px] text-muted">{worker ? 'اجعل العامل داخل الإطار والجوال عموديًا.' : 'اجعل المكان داخل الإطار والجوال عموديًا.'}</div>
           <button
             type="button"
             onClick={capture}
@@ -161,7 +170,7 @@ export function CameraCapture({
       {step === 'review' && shot && (
         <div className="flex flex-col gap-3 pb-3" data-testid="camera-review">
           {/* eslint-disable-next-line @next/next/no-img-element -- معاينة محلية لصورة ملتقطة */}
-          <img src={shot.url} alt="معاينة صورة العمالة" className="mx-auto max-h-[420px] w-auto max-w-full rounded-[14px] border border-line object-contain" />
+          <img src={shot.url} alt="معاينة الصورة الملتقطة" className="mx-auto max-h-[420px] w-auto max-w-full rounded-[14px] border border-line object-contain" />
           {(shot.landscape || shot.dark) && (
             <div className="rounded-[10px] bg-[#FBF4E1] px-3 py-2 text-[12.5px] leading-[1.7] text-[#7A5B14]" role="status" data-testid="camera-quality-warning">
               {shot.landscape && 'الصورة أفقية؛ الأفضل إعادة الالتقاط والجوال عمودي. '}
