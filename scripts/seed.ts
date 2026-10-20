@@ -41,24 +41,21 @@ const ADMINS = [{ username: 'admin', full_name: 'عبدالرحمن الشهري
 
 type SeedItem = { key: string; group: 'contractor' | 'deep' | 'supervisor'; title: string; description?: string; weight: number | null };
 
+// بنود الجولة بعد تعديلات الجهة: «هيئة العامل» بدل «الالتزام بخطة العمل»، وبلا بنود تنظيف عميق،
+// وبنود تقييم المشرف الميداني مطابقة لبنود جولة المقاول.
+const ROUND_ITEMS: { key: string; title: string; description?: string; weight: number }[] = [
+  { key: 'floors_sinks', title: 'نظافة دورات المياه', description: 'الأرضيات والأحواض والأدوات الصحية', weight: 25 },
+  { key: 'odor', title: 'رائحة دورات المياه', weight: 15 },
+  { key: 'fresheners', title: 'تعبئة الفواحات', weight: 10 },
+  { key: 'mirrors_doors', title: 'نظافة المرايا والأبواب ومقابضها', weight: 12 },
+  { key: 'glass_partitions', title: 'نظافة الزجاج والقواطع', weight: 10 },
+  { key: 'waste', title: 'جمع النفايات وتفريغ السلال', weight: 15 },
+  { key: 'worker_appearance', title: 'هيئة العامل', weight: 13 },
+];
+
 const ITEMS: SeedItem[] = [
-  { key: 'contractor_floors_sinks', group: 'contractor', title: 'نظافة دورات المياه', description: 'الأرضيات والأحواض والأدوات الصحية', weight: 25 },
-  { key: 'contractor_odor', group: 'contractor', title: 'رائحة دورات المياه', weight: 15 },
-  { key: 'contractor_fresheners', group: 'contractor', title: 'تعبئة الفواحات', weight: 10 },
-  { key: 'contractor_mirrors_doors', group: 'contractor', title: 'نظافة المرايا والأبواب ومقابضها', weight: 12 },
-  { key: 'contractor_glass_partitions', group: 'contractor', title: 'نظافة الزجاج والقواطع', weight: 10 },
-  { key: 'contractor_waste', group: 'contractor', title: 'جمع النفايات وتفريغ السلال', weight: 15 },
-  { key: 'contractor_work_plan', group: 'contractor', title: 'الالتزام بخطة العمل', weight: 13 },
-  { key: 'deep_sinks_toilet_bases', group: 'deep', title: 'تنظيف وتعقيم الأحواض وقواعد الحمام', weight: null },
-  { key: 'deep_drains', group: 'deep', title: 'تنظيف البلاعات', weight: null },
-  { key: 'deep_glass_partitions', group: 'deep', title: 'تنظيف فواصل الزجاج بالكامل', weight: null },
-  { key: 'deep_ac_grilles', group: 'deep', title: 'تنظيف جريلات التكييف', weight: null },
-  { key: 'supervisor_cleanliness', group: 'supervisor', title: 'نظافة دورات المياه ومحتوياتها', weight: 30 },
-  { key: 'supervisor_engineer_instructions', group: 'supervisor', title: 'الاستجابة لتعليمات المهندس المشرف', weight: 15 },
-  { key: 'supervisor_emergency_response', group: 'supervisor', title: 'الاستجابة السريعة لأي حالة طارئة', weight: 15 },
-  { key: 'supervisor_sanitary_maintenance', group: 'supervisor', title: 'صيانة الأجهزة الصحية وتأمين قطع الغيار', weight: 18 },
-  { key: 'supervisor_lighting', group: 'supervisor', title: 'صيانة الإنارة والكشافات', weight: 12 },
-  { key: 'supervisor_exhaust_fans', group: 'supervisor', title: 'صيانة مراوح الشفط', weight: 10 },
+  ...ROUND_ITEMS.map((i) => ({ ...i, key: `contractor_${i.key}`, group: 'contractor' as const })),
+  ...ROUND_ITEMS.map((i) => ({ ...i, key: `supervisor_${i.key}`, group: 'supervisor' as const })),
 ];
 
 function fail(step: string, error: unknown): never {

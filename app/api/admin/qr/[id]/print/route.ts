@@ -11,12 +11,7 @@ export const maxDuration = 60;
 export const GET = authed<{ id: string }>(['admin'], async ({ user, params }) => {
   const card = await qrCardById(params.id);
   if (!card) throw new ApiError(404, 'not_found', 'رمز QR غير موجود.');
-  const html = await qrCardDocument({
-    svg: card.svg,
-    name: card.restroom.name,
-    location: `${card.restroom.floor} · ${card.restroom.building}`,
-    displayUrl: card.displayUrl,
-  });
+  const html = await qrCardDocument({ svg: card.svg, code: card.restroom.code, scanUrl: card.scanUrl });
   const pdf = await htmlToPdf(html, { format: 'A5', margin: '0' });
   await audit(user.id, 'qr.print', 'qr_codes', card.id, { restroom_code: card.restroom.code });
   const filename = `jodex-qr-${card.restroom.code}.pdf`;

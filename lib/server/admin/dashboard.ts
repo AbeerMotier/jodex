@@ -1,5 +1,5 @@
 import 'server-only';
-import { SOURCE_LABEL, type Source } from '@/lib/domain/catalog';
+import { FEEDBACK_MAX_WEIGHT, FEEDBACK_WEIGHT, SATISFACTION_FORMULA, SOURCE_LABEL, type Source } from '@/lib/domain/catalog';
 import { instantDate } from '@/lib/domain/format';
 import {
   comparisonSeries,
@@ -73,7 +73,16 @@ export async function buildDashboard(user: SessionUser, q: CommonQuery, source: 
   const quality = {
     contractor: showContractor ? { value: contractorAverage(rounds), sub: `${completed.length} جولة مكتملة` } : null,
     supervisor: showSupervisor ? { value: supervisorAverage(evaluations), sub: `${evaluations.length} تقييم` } : null,
-    beneficiary: showBeneficiary ? { value: fb.satisfaction, sub: `${fb.total} تقييم · ممتاز وجيد` } : null,
+    beneficiary: showBeneficiary
+      ? {
+          value: fb.satisfaction,
+          sub: `${fb.total} تقييم · ممتاز ${FEEDBACK_WEIGHT.excellent} · جيد ${FEEDBACK_WEIGHT.good} · سيئ ${FEEDBACK_WEIGHT.bad}`,
+          counts: { excellent: fb.excellent, good: fb.good, bad: fb.bad, total: fb.total },
+          weights: FEEDBACK_WEIGHT,
+          maxWeight: FEEDBACK_MAX_WEIGHT,
+          formula: SATISFACTION_FORMULA,
+        }
+      : null,
     compliance: showContractor ? compliance : null,
   };
 

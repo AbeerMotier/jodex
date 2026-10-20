@@ -1,9 +1,9 @@
 import { fieldErrors, passwordSetSchema } from '@/lib/domain/validation';
-import { ApiError, authed } from '@/lib/server/http';
+import { ApiError, fullAdminRoute } from '@/lib/server/http';
 import { resetUserPassword } from '@/lib/server/admin/directory';
 
 /** جسم الطلب اختياري: { password } لكلمة يحددها الأدمن، وبدونه تُنشأ كلمة عشوائية قوية */
-export const POST = authed<{ id: string }>(['admin'], async ({ req, user, params }) => {
+export const POST = fullAdminRoute<{ id: string }>(async ({ req, user, params }) => {
   const raw = (await req.text()).trim();
   let body: unknown = {};
   try {

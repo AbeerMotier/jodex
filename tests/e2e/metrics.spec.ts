@@ -63,8 +63,9 @@ test.beforeAll(async () => {
     sup.at = at(D1, '12:00');
     await ok(evaluateSite(sup, w.rooms.a.id, () => 5));
     expect((await giveFeedback(w.rooms.b.token, at(D1, '12:30'), { rating: 'excellent' })).status).toBe(201);
-    await ok(completeRound(m1, 'pm', { uploadAt: at(D1, '13:10'), submitAt: at(D1, '14:45') }, 'partial'));
-    await ok(completeRound(m2, 'pm', { uploadAt: at(D1, '13:10'), submitAt: at(D1, '15:30') }));
+    // المسائية 12:00–14:30 ملتزمة طوال نافذتها
+    await ok(completeRound(m1, 'pm', { uploadAt: at(D1, '13:10'), submitAt: at(D1, '14:00') }, 'partial'));
+    await ok(completeRound(m2, 'pm', { uploadAt: at(D1, '13:10'), submitAt: at(D1, '14:20') }));
     // D2 (اليوم)
     await ok(completeRound(m1, 'am', { uploadAt: at(D2, '08:30'), submitAt: at(D2, '10:00') }));
     sup.at = at(D2, '11:30');
@@ -94,7 +95,8 @@ test('فترة «اليوم» — الكل', async () => {
   close(d.quality.contractor!.value, 100);
   expect(d.quality.contractor!.sub).toBe('1 جولة مكتملة');
   close(d.quality.supervisor!.value, 70);
-  close(d.quality.beneficiary!.value, 66.67);
+  // (60 + 30 + 10) ÷ (3 × 60)
+  close(d.quality.beneficiary!.value, 55.56);
   close(d.quality.compliance!.am, 16.67);
   close(d.quality.compliance!.pm, null);
   close(d.quality.compliance!.overall, 16.67);
@@ -108,16 +110,17 @@ test('فترة «أسبوع» — الكل ومقارنة الأداء لكل د
   const w = world();
   const d = await dashboard('period=week&source=all');
   expect(d.total.value).toBe(7);
-  expect(d.rounds).toMatchObject({ required: 12, completed: 4, late: 3, missed: 5 });
+  expect(d.rounds).toMatchObject({ required: 12, completed: 4, late: 1, missed: 5 });
   close(d.rounds!.completedPct, 33.33);
-  close(d.rounds!.latePct, 25);
+  close(d.rounds!.latePct, 8.33);
   close(d.rounds!.missedPct, 41.67);
   close(d.quality.contractor!.value, (300 + partial) / 4);
   close(d.quality.supervisor!.value, 80);
-  close(d.quality.beneficiary!.value, 75);
+  // (2×60 + 1×30 + 1×10) ÷ (4×60)
+  close(d.quality.beneficiary!.value, 66.67);
   close(d.quality.compliance!.am, 25);
-  close(d.quality.compliance!.pm, 36.67);
-  close(d.quality.compliance!.overall, 28.89);
+  close(d.quality.compliance!.pm, 66.67);
+  close(d.quality.compliance!.overall, 38.89);
   expect(d.comparison.series).toEqual(['contractor', 'supervisor']);
   const point = (id: string) => d.comparison.points.find((p) => p.restroomId === id)!;
   close(point(w.rooms.a.id).contractor, (200 + partial) / 3);
@@ -128,7 +131,7 @@ test('فترة «أسبوع» — الكل ومقارنة الأداء لكل د
   close(point(w.rooms.c.id).supervisor, 80);
   expect(d.performance!.map((p) => p.monitorId)).toEqual([w.users.m1.id, w.users.m2.id, w.users.m3.id]);
   const m1 = d.performance![0];
-  close(m1.cp, 75);
+  close(m1.cp, 83.33);
   close(m1.a, (200 + partial) / 3);
   close(m1.s, 100);
   close(m1.q, ((200 + partial) / 3 + 100) / 2);
@@ -136,13 +139,13 @@ test('فترة «أسبوع» — الكل ومقارنة الأداء لكل د
 
 test('فترة «شهر» — تشمل D0 وتستبعد ما قبل 30 يومًا', async () => {
   const d = await dashboard('period=month&source=all');
-  expect(d.rounds).toMatchObject({ required: 18, completed: 5, late: 3, missed: 10 });
+  expect(d.rounds).toMatchObject({ required: 18, completed: 5, late: 1, missed: 10 });
   close(d.quality.contractor!.value, (300 + partial) / 5);
   close(d.quality.supervisor!.value, 80);
-  close(d.quality.beneficiary!.value, 75);
+  close(d.quality.beneficiary!.value, 66.67);
   close(d.quality.compliance!.am, 27.78);
-  close(d.quality.compliance!.pm, 18.33);
-  close(d.quality.compliance!.overall, 24);
+  close(d.quality.compliance!.pm, 33.33);
+  close(d.quality.compliance!.overall, 30);
 });
 
 test('فلتر «نوع التقييم»: لا خلط بين المصادر', async () => {
@@ -171,7 +174,7 @@ test('فلتر «نوع التقييم»: لا خلط بين المصادر', as
   expect(beneficiary.rounds).toBeNull();
   expect(beneficiary.quality.contractor).toBeNull();
   expect(beneficiary.quality.supervisor).toBeNull();
-  close(beneficiary.quality.beneficiary!.value, 75);
+  close(beneficiary.quality.beneficiary!.value, 66.67);
   expect(beneficiary.recent.kind).toBe('feedback');
   expect(beneficiary.recent.items).toHaveLength(4);
 });
@@ -182,7 +185,7 @@ test('فلاتر الموقع: دورة مياه محددة، والدور', asy
   expect(a.rounds).toMatchObject({ required: 4, completed: 3 });
   close(a.quality.contractor!.value, (200 + partial) / 3);
   close(a.quality.supervisor!.value, 100);
-  close(a.quality.beneficiary!.value, 66.67);
+  close(a.quality.beneficiary!.value, 55.56);
   expect(a.comparison.points.map((p) => p.restroomId)).toEqual([w.rooms.a.id]);
 
   const c = await dashboard(`period=week&source=all&floor=${encodeURIComponent(w.rooms.c.floor)}`);

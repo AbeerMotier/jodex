@@ -36,7 +36,7 @@ test('«سيئ» بلا سبب يُرفض، و«أخرى» بلا نص يُرف�
   expect(ok.status).toBe(201);
 });
 
-test('مسح QR حقيقي من صفحة رموز QR ← صفحة التقييم ← تقييم محفوظ يظهر في الأدمن، ومرة واحدة لكل جهاز خلال 10 دقائق', async ({ browser }) => {
+test('مسح QR حقيقي من صفحة رموز QR (الترميز فقط) ← صفحة التقييم ← تقييم محفوظ يظهر في الأدمن، ومرة واحدة لكل جهاز خلال 24 ساعة', async ({ browser }) => {
   const w = world();
   const room = w.rooms.a;
   // 1) الأدمن يعرض البطاقة، ونفك ترميز صورة الرمز كما تراها الكاميرا
@@ -46,7 +46,7 @@ test('مسح QR حقيقي من صفحة رموز QR ← صفحة التقييم
     await adminUi.page.goto(`/admin/qr?building=${w.building.id}`);
     const card = adminUi.page.getByTestId('qr-card').filter({ hasText: room.name });
     await expect(card).toHaveCount(1);
-    const png = await card.getByRole('img', { name: new RegExp(room.name) }).screenshot({ scale: 'device' });
+    const png = await card.getByRole('img', { name: new RegExp(room.code) }).screenshot({ scale: 'device' });
     const { data, info } = await sharp(png)
       .extend({ top: 24, bottom: 24, left: 24, right: 24, background: '#ffffff' })
       .ensureAlpha()
@@ -59,14 +59,16 @@ test('مسح QR حقيقي من صفحة رموز QR ← صفحة التقييم
   } finally {
     await closeAll(adminUi.context);
   }
-  expect(decoded).toBe(`${BASE()}/r/${room.token}`);
-  expect(decoded).not.toContain(room.id); // لا يكشف المعرف الداخلي
+  // محتوى الرمز = الترميز فقط (بلا رابط ولا اسم ولا معرّف داخلي)
+  expect(decoded).toBe(room.code);
+  expect(decoded).not.toContain(BASE());
+  expect(decoded).not.toContain(room.id);
 
-  // 2) المستفيد يفتح الرابط المفكوك ويقيّم «سيئ» مع سبب «أخرى»
+  // 2) المستفيد يفتح دورة المياه بالترميز المقروء (صفحة المسح تنقله إلى /r/{الترميز}) ويقيّم «سيئ» مع سبب «أخرى»
   const visitor = await browserAs(browser, null, at(DAY, '10:01'), { width: 390, height: 844 });
   try {
     const page = visitor.page;
-    await page.goto(decoded);
+    await page.goto(`/r/${decoded}`);
     await expect(page.getByText(room.name).first()).toBeVisible();
     await page.getByTestId('face-bad').click();
     // «سيئ» بلا سبب أو «أخرى» بلا نص: لا يظهر زر الإرسال أصلًا
@@ -77,11 +79,10 @@ test('مسح QR حقيقي من صفحة رموز QR ← صفحة التقييم
     await page.getByTestId('other-text').fill('لا يوجد صابون');
     await page.getByTestId('submit-feedback').click();
     await expect(page.getByTestId('thanks')).toBeVisible();
-    // نفس الجهاز خلال 10 دقائق ← مرفوض برسالة واضحة
-    await page.goto(decoded);
-    await page.getByTestId('face-excellent').click();
-    await page.getByTestId('submit-feedback').click();
-    await expect(page.getByText(/سبق أن قيّمت دورة المياه هذه/)).toBeVisible();
+    // نفس الجهاز خلال 24 ساعة ← رسالة المنع بدل النموذج
+    await page.goto(`/r/${decoded}`);
+    await expect(page.getByTestId('rate-blocked')).toContainText(/سبق أن قيّمت دورة المياه هذه/);
+    await expect(page.getByTestId('face-excellent')).toHaveCount(0);
     expect(visitor.errors).toEqual([]);
   } finally {
     await closeAll(visitor.context);
@@ -104,7 +105,8 @@ test('مسح QR حقيقي من صفحة رموز QR ← صفحة التقييم
       admin.get(`/api/admin/dashboard?period=today&restroom=${room.id}&source=beneficiary`),
     );
     expect(dash.total.value).toBe(2);
-    expect(dash.quality.beneficiary.value).toBe(50);
+    // (1×60 + 1×10) ÷ (2×60) × 100
+    expect(dash.quality.beneficiary.value).toBe(58.33);
   } finally {
     await admin.dispose();
   }

@@ -1,10 +1,10 @@
 import 'server-only';
 import { ANSWER_LABEL, DISPLAY_STATUS, PHOTO_SLOT_LABEL, PHOTO_SLOTS, RATING_LABEL, SHIFT_LABEL, type PhotoSlot, type Tone } from '@/lib/domain/catalog';
 import type { Rating } from '@/lib/domain/scoring';
-import { instantDate } from '@/lib/domain/format';
+import { instantDate, timeHM } from '@/lib/domain/format';
 import type { MetricEvaluation, MetricRound } from '@/lib/domain/metrics';
 import { answerFactor, type Answer } from '@/lib/domain/scoring';
-import { minutesToHHMM, riyadhMinuteOfDay } from '@/lib/domain/time';
+import { addDays, minutesToHHMM, riyadhMinuteOfDay, riyadhToInstant } from '@/lib/domain/time';
 import { roundDisplayStatus, SHIFT_PLAN, type Shift } from '@/lib/domain/schedule';
 import { categorySubtotals, ratingStatus, visitClassification } from '@/lib/domain/visit';
 import { ApiError } from '../http';
@@ -51,6 +51,7 @@ interface LogViewRow {
   responsible_id: string;
   on_behalf_of_id: string | null;
   needs_urgent: string | null;
+  matches_round: 'yes' | 'no' | null;
 }
 
 /** سجل الجولات: جولات المراقبين + تقييمات المشرفين (بدون المستفيدين)، من الأحدث */
@@ -122,6 +123,7 @@ export async function listLog(q: LogQuery, now: Date): Promise<{ rows: EntryView
         submitted_at: r.occurred_at ?? r.sort_at,
         score: r.score === null ? null : Number(r.score),
         needs_urgent: r.needs_urgent,
+        matches_round: r.matches_round,
       };
       return evaluationEntry(ev, roomMap, names, instantDate);
     }),
@@ -149,11 +151,26 @@ export async function logDetails(kind: string, id: string, now: Date) {
       .eq('id', id)
       .maybeSingle();
     if (!r) throw new ApiError(404, 'not_found', 'السجل غير موجود.');
-    const [{ data: answers }, { data: photos }, names] = await Promise.all([
+    // تحقق المشرفين الميدانيين من جولات هذا اليوم لنفس دورة المياه (إجابة «مطابقة للواقع؟»)
+    const dayStart = riyadhToInstant(r.round_date, 0).toISOString();
+    const dayEnd = riyadhToInstant(addDays(r.round_date, 1), 0).toISOString();
+    const [{ data: answers }, { data: photos }, { data: checks }] = await Promise.all([
       client.from('round_answers').select('item_id, answer').eq('round_id', id),
       client.from('round_photos').select('slot, storage_key').eq('round_id', id),
-      namesById([r.executed_by_id, r.on_behalf_of_id, r.assigned_monitor_id]),
+      client
+        .from('supervisor_evaluations')
+        .select('supervisor_id, matches_round, submitted_at')
+        .eq('restroom_id', r.restroom_id)
+        .not('submitted_at', 'is', null)
+        .not('matches_round', 'is', null)
+        .gte('submitted_at', dayStart)
+        .lt('submitted_at', dayEnd)
+        .order('submitted_at'),
     ]);
+    const names = await namesById([r.executed_by_id, r.on_behalf_of_id, r.assigned_monitor_id, ...(checks ?? []).map((c) => c.supervisor_id)]);
+    const verification = (checks ?? [])
+      .map((c) => `${c.matches_round === 'yes' ? 'مطابقة' : 'غير مطابقة'} (${names[c.supervisor_id] ?? '—'} · ${timeHM(c.submitted_at)})`)
+      .join('، ');
     const snap = (r.weights_snapshot ?? {}) as Snapshot;
     const partial = Number(snap.partial_credit_pct ?? 50);
     const ans = new Map((answers ?? []).map((a) => [a.item_id, a.answer as Answer]));
@@ -178,6 +195,8 @@ export async function logDetails(kind: string, id: string, now: Date) {
         { k: 'الموقع', v: `${room.name} · ${room.floor} · ${room.building}`, type: 'text' },
         { k: 'بدء الجولة', v: r.started_at, type: 'time' },
         { k: 'درجة الالتزام', v: r.compliance_score === null ? null : Number(r.compliance_score), type: 'pct' },
+        { k: 'ترميز دورة المياه', v: room.code, type: 'text' },
+        { k: 'هل جولة المراقب المسجلة مطابقة للواقع؟ (المشرف الميداني)', v: verification || 'لم يُتحقق منها بعد', type: 'text' },
       ],
       answerHead: 'الإجابة',
       rows:
@@ -203,7 +222,13 @@ export async function logDetails(kind: string, id: string, now: Date) {
         }),
       photos:
         r.status === 'submitted'
-          ? PHOTO_SLOTS.filter((s) => s.required || photoMap.has(s.slot)).map((s) => ({ label: PHOTO_SLOT_LABEL[s.slot], url: photoMap.get(s.slot) ?? null }))
+          ? [
+              ...PHOTO_SLOTS.filter((s) => s.required || photoMap.has(s.slot)).map((s) => ({ label: PHOTO_SLOT_LABEL[s.slot], url: photoMap.get(s.slot) ?? null })),
+              // صور خانات أُلغيت لاحقًا (مثل «المراحيض») تبقى ظاهرة في الجولات السابقة
+              ...[...photoMap.entries()]
+                .filter(([slot]) => !PHOTO_SLOTS.some((s) => s.slot === slot))
+                .map(([slot, url]) => ({ label: PHOTO_SLOT_LABEL[slot], url })),
+            ]
           : [],
       note:
         r.status === 'submitted'
@@ -256,7 +281,12 @@ export async function logDetails(kind: string, id: string, now: Date) {
         { k: 'الوقت', v: e.submitted_at, type: 'time' },
         { k: 'المشرف الميداني', v: names[e.supervisor_id] ?? '—', type: 'text' },
         { k: 'الموقع', v: `${room.name} · ${room.floor} · ${room.building}`, type: 'text' },
-        { k: 'جولة المراقب مطابقة للواقع', v: e.matches_round === 'yes' ? 'نعم' : e.matches_round === 'no' ? 'لا' : '—', type: 'text' },
+        { k: 'ترميز دورة المياه', v: room.code, type: 'text' },
+        {
+          k: 'هل جولة المراقب المسجلة مطابقة للواقع؟',
+          v: e.matches_round === 'yes' ? 'نعم' : e.matches_round === 'no' ? 'لا — لا تُحتسب في أداء المتميزين' : '—',
+          type: 'text',
+        },
         { k: 'يحتاج معالجة فورية', v: e.needs_urgent === 'yes' ? 'نعم' : 'لا', type: 'text' },
       ],
       answerHead: 'التقييم',

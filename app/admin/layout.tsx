@@ -9,5 +9,5 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const user = await getSessionUser();
   if (!user) redirect('/login?next=/admin');
   if (user.role !== 'admin') redirect('/forbidden');
-  return <AdminShell adminName={user.fullName}>{children}</AdminShell>;
+  return <AdminShell adminName={user.fullName} fullAccess={user.adminScope === 'full'}>{children}</AdminShell>;
 }

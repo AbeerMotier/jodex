@@ -14,7 +14,7 @@ beforeAll(async () => {
   const svc = serviceClient();
   const { error } = await svc.rpc('ensure_daily_rounds', { p_date: DATE });
   if (error) throw error;
-  for (const key of ['admin', 'm1', 'm2', 'sub', 'sup', 'sup2'] as const) {
+  for (const key of ['admin', 'm1', 'm2', 'sub', 'sup', 'sup2', 'con'] as const) {
     const u = world.users[key];
     clients[key] = await userClient(u.username, u.password);
   }
@@ -47,6 +47,26 @@ describe('RLS — القراءة حسب الدور والنطاق', () => {
     expect(await visibleRoundRooms(clients.sup2)).toEqual([world.rooms.c.id]);
     const { data: rooms } = await clients.sup.from('restrooms').select('id').in('id', qaRoomIds());
     expect((rooms ?? []).map((r) => r.id).sort()).toEqual([world.rooms.a.id, world.rooms.b.id].sort());
+  });
+
+  it('المقاول يرى دورات المياه المسندة إليه وجولاتها فقط (للعرض)', async () => {
+    expect(await visibleRoundRooms(clients.con)).toEqual([world.rooms.a.id, world.rooms.c.id].sort());
+    const { data: rooms } = await clients.con.from('restrooms').select('id').in('id', qaRoomIds());
+    expect((rooms ?? []).map((r) => r.id).sort()).toEqual([world.rooms.a.id, world.rooms.c.id].sort());
+    const { data: assigns } = await clients.con.from('contractor_assignments').select('restroom_id');
+    expect((assigns ?? []).map((a) => a.restroom_id).sort()).toEqual([world.rooms.a.id, world.rooms.c.id].sort());
+    // لا تقييمات ولا رموز QR ولا مستخدمين آخرين ولا تقييمات مستفيدين
+    for (const table of ['qr_codes', 'beneficiary_feedback', 'supervisor_evaluations', 'audit_log']) {
+      const { data } = await clients.con.from(table).select('id').limit(5);
+      expect(data ?? []).toHaveLength(0);
+    }
+    const { data: others } = await clients.con.from('users').select('id').neq('id', world.users.con.id);
+    expect(others ?? []).toHaveLength(0);
+    // لا كتابة مباشرة
+    const ins = await clients.con.from('contractor_assignments').insert({ contractor_id: world.users.con.id, restroom_id: world.rooms.b.id });
+    expect(ins.error).not.toBeNull();
+    const upd = await clients.con.from('restrooms').update({ name: 'x' }).eq('id', world.rooms.a.id).select('id');
+    expect(upd.data ?? []).toHaveLength(0);
   });
 
   it('الأدمن يرى الكل', async () => {

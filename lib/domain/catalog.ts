@@ -2,7 +2,9 @@
 import type { Answer, NoteSeverity, Rating } from './scoring';
 import type { BadgeState, RoundDisplayStatus, Shift } from './schedule';
 
-export type Role = 'admin' | 'supervisor' | 'contractor_monitor';
+export type Role = 'admin' | 'supervisor' | 'contractor_monitor' | 'contractor';
+/** نطاق صلاحية الأدمن: الكامل، أو المحدود (بدون المستخدمين والصلاحيات والمباني ودورات المياه والإعدادات والأوزان) */
+export type AdminScope = 'full' | 'limited';
 export type MonitorKind = 'primary' | 'substitute';
 export type ItemGroup = 'contractor' | 'deep' | 'supervisor';
 
@@ -10,12 +12,19 @@ export const ROLE_LABEL: Record<Role, string> = {
   admin: 'الأدمن',
   supervisor: 'المشرف الميداني',
   contractor_monitor: 'مراقب المقاول',
+  contractor: 'المقاول',
+};
+
+export const ADMIN_SCOPE_LABEL: Record<AdminScope, string> = {
+  full: 'صلاحيات كاملة',
+  limited: 'بدون إدارة المستخدمين والمباني والإعدادات',
 };
 
 export const ROLE_HOME: Record<Role, string> = {
   admin: '/admin',
   supervisor: '/supervisor',
   contractor_monitor: '/monitor',
+  contractor: '/contractor',
 };
 
 export const SHIFT_LABEL: Record<Shift, string> = { am: 'الجولة الصباحية', pm: 'الجولة المسائية' };
@@ -54,17 +63,25 @@ export const BADGE_STATUS: Record<BadgeState, { label: string; tone: Tone }> = {
 
 export type PhotoSlot = 'tools' | 'entry' | 'sinks' | 'toilets' | 'general' | 'labor';
 
-export const PHOTO_SLOTS: { slot: PhotoSlot; label: string; required: boolean }[] = [
+/**
+ * مرفقات الجولة الحالية. «المراحيض» أُزيلت بطلب الجهة (تبقى تسميتها لعرض الجولات السابقة فقط)،
+ * و«العمالة» إلزامية وتُلتقط بالكاميرا مباشرة (cameraOnly) دون رفع صورة محفوظة.
+ */
+export const PHOTO_SLOTS: { slot: PhotoSlot; label: string; required: boolean; cameraOnly?: boolean }[] = [
   { slot: 'tools', label: 'الأدوات المستخدمة', required: true },
   { slot: 'entry', label: 'المدخل', required: true },
   { slot: 'sinks', label: 'المغاسل', required: true },
-  { slot: 'toilets', label: 'المراحيض', required: true },
   { slot: 'general', label: 'الوضع العام لدورة المياه', required: true },
-  { slot: 'labor', label: 'العمالة', required: false },
+  { slot: 'labor', label: 'العمالة', required: true, cameraOnly: true },
 ];
 export const REQUIRED_PHOTO_SLOTS = PHOTO_SLOTS.filter((s) => s.required).map((s) => s.slot);
-export const PHOTO_SLOT_LABEL = Object.fromEntries(PHOTO_SLOTS.map((s) => [s.slot, s.label])) as Record<PhotoSlot, string>;
+export const CAMERA_ONLY_SLOTS = PHOTO_SLOTS.filter((s) => s.cameraOnly).map((s) => s.slot);
+export const PHOTO_SLOT_LABEL: Record<PhotoSlot, string> = {
+  ...(Object.fromEntries(PHOTO_SLOTS.map((s) => [s.slot, s.label])) as Record<PhotoSlot, string>),
+  toilets: 'المراحيض',
+};
 
+/** خانة صورة متاحة للرفع في الجولات الحالية */
 export function isPhotoSlot(v: unknown): v is PhotoSlot {
   return typeof v === 'string' && PHOTO_SLOTS.some((s) => s.slot === v);
 }
@@ -79,6 +96,10 @@ export type FeedbackRating = 'excellent' | 'good' | 'bad';
 export const FEEDBACK_RATING_VALUE: Record<FeedbackRating, 1 | 4 | 5> = { excellent: 5, good: 4, bad: 1 };
 export const FEEDBACK_VALUE_RATING: Record<number, FeedbackRating> = { 5: 'excellent', 4: 'good', 1: 'bad' };
 export const FEEDBACK_RATING_LABEL: Record<FeedbackRating, string> = { excellent: 'ممتاز', good: 'جيد', bad: 'سيئ' };
+/** أوزان الوجوه في مؤشر رضا المستفيدين، والنسبة تُحسب على أساس أعلى وزن (60) */
+export const FEEDBACK_WEIGHT: Record<FeedbackRating, number> = { excellent: 60, good: 30, bad: 10 };
+export const FEEDBACK_MAX_WEIGHT = 60;
+export const SATISFACTION_FORMULA = 'مؤشر الرضا = (ممتاز × 60 + جيد × 30 + سيئ × 10) ÷ (عدد التقييمات × 60) × 100';
 export const FEEDBACK_SELECTION_MESSAGE: Record<FeedbackRating, string> = {
   excellent: 'رائع! يسعدنا أن المكان نال رضاك.',
   good: 'شكرًا لك، يسعدنا أن المكان بحالة جيدة.',
@@ -98,8 +119,8 @@ export const FEEDBACK_REASON_LABEL = Object.fromEntries(FEEDBACK_REASONS.map((r)
   string
 >;
 
-/** [قرار مطلوب] تقييم واحد لكل جهاز لكل دورة مياه كل 10 دقائق */
-export const FEEDBACK_WINDOW_MINUTES = 10;
+/** تقييم واحد لكل مستفيد (حسابه إن كان مسجلًا، وإلا جهازه) لكل دورة مياه كل 24 ساعة */
+export const FEEDBACK_WINDOW_MINUTES = 24 * 60;
 
 export const WEEKDAY_LABEL = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 

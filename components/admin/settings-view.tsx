@@ -9,7 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiClientError } from '@/lib/client/api';
 import { useApi } from '@/lib/client/use-api';
-import { EVALUATION_TYPE_LABEL, ITEM_GROUP_EVALUATION, ITEM_GROUP_SCORED, WEEKDAY_LABEL, type ItemGroup } from '@/lib/domain/catalog';
+import { EVALUATION_TYPE_LABEL, ITEM_GROUP_EVALUATION, ITEM_GROUP_SCORED, type ItemGroup } from '@/lib/domain/catalog';
 import { fmtNum } from '@/lib/domain/format';
 import { GROUP_SUM_MESSAGE, settingsItemSchema, type RecalcOption } from '@/lib/domain/validation';
 import { summarizeWeights } from '@/lib/domain/weights';
@@ -57,10 +57,10 @@ const RECALC: { value: RecalcOption; label: string }[] = [
   { value: 'month', label: 'إعادة احتساب آخر 30 يومًا' },
 ];
 
+// بنود «التنظيف العميق» أُلغيت بطلب الجهة: لا تظهر هنا ولا في الجولة (تبقى في السجلات السابقة فقط)
 const SECTIONS: { group: ItemGroup; title: string; hint?: string }[] = [
   { group: 'supervisor', title: 'معايير تقييم المشرف' },
   { group: 'contractor', title: 'بنود جولة المقاول' },
-  { group: 'deep', title: 'بنود التنظيف العميق', hint: 'قائمة تحقق مستقلة لا تدخل في الدرجة — بلا أوزان.' },
 ];
 
 function toDraft(items: ServerItem[]): DraftItem[] {
@@ -330,32 +330,6 @@ export function SettingsView() {
       </div>
 
       <section className="rounded-[20px] border border-line bg-white p-5">
-        <h2 className="m-0 mb-1 text-[16px] font-bold">يوم التنظيف العميق</h2>
-        <div className="mb-3 text-[13px] text-muted">يكون قسم التنظيف العميق إلزاميًا على مراقب المقاول في هذا اليوم فقط، واختياريًا في بقية الأيام.</div>
-        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="يوم التنظيف العميق" data-testid="deep-day">
-          {WEEKDAY_LABEL.map((d, i) => {
-            const on = weekday === i;
-            return (
-              <button
-                key={d}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => {
-                  setWeekday(i);
-                  setDirty(true);
-                }}
-                className="min-h-10 rounded-[9px] border px-3.5 py-2 text-[13.5px] transition-colors"
-                style={{ borderColor: on ? '#2F4F44' : '#E3EAE6', background: on ? '#2F4F44' : '#FFFFFF', color: on ? '#FFFFFF' : '#2F4F44', fontWeight: on ? 600 : 400 }}
-              >
-                {d}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="rounded-[20px] border border-line bg-white p-5">
         <h2 className="m-0 mb-1 text-[16px] font-bold">تطبيق الأوزان على النتائج</h2>
         <div className="mb-3 text-[13px] text-muted">
           تُحفظ نسخة الأوزان مع كل جولة وتقييم. الافتراضي: تُطبَّق الأوزان الجديدة على ما يُرسل بعد الحفظ، ويمكن إعادة احتساب نتائج فترة محددة.
@@ -517,10 +491,7 @@ function ItemDialog({
           <span className="text-[12.5px] font-bold text-muted">المجموعة</span>
           <select value={group} disabled={!isNew} data-testid="item-group" onChange={(e) => setGroup(e.target.value as ItemGroup)} className="min-h-11 rounded-[11px] border border-line bg-white px-3 text-[14px] outline-ink disabled:bg-page">
             {evalType === 'contractor_round' ? (
-              <>
-                <option value="contractor">بنود الجولة (محتسبة في الدرجة)</option>
-                <option value="deep">التنظيف العميق (قائمة تحقق)</option>
-              </>
+              <option value="contractor">بنود الجولة (محتسبة في الدرجة)</option>
             ) : (
               <option value="supervisor">بنود تقييم المشرف (محتسبة في الدرجة)</option>
             )}

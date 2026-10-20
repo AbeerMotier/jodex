@@ -1,7 +1,8 @@
 import { FEEDBACK_RATING_VALUE, FEEDBACK_WINDOW_MINUTES } from '@/lib/domain/catalog';
 import { feedbackSchema } from '@/lib/domain/validation';
+import { getSessionUser } from '@/lib/server/auth';
 import { ApiError, clientIp, json, parseJson, publicRoute } from '@/lib/server/http';
-import { clientHash, resolveQrToken } from '@/lib/server/public';
+import { feedbackIdentity, feedbackRetryAfter, resolveRestroomRef, tooSoonMessage } from '@/lib/server/public';
 import { hitRateLimit, minutesText } from '@/lib/server/rate-limit';
 import { createServiceClient } from '@/lib/server/supabase';
 
@@ -19,7 +20,7 @@ const DB_ERRORS: Record<string, [number, string]> = {
 };
 
 export const POST = publicRoute<{ token: string }>(async ({ req, params, now }) => {
-  const info = await resolveQrToken(params.token);
+  const info = await resolveRestroomRef(params.token);
   if (!info) throw new ApiError(404, 'invalid_token', 'الرمز غير صالح');
   const body = await parseJson(req, feedbackSchema);
 
@@ -29,13 +30,23 @@ export const POST = publicRoute<{ token: string }>(async ({ req, params, now }) 
     throw new ApiError(429, 'rate_limited', `طلبات كثيرة من هذه الشبكة. حاول بعد ${minutesText(ipLimit.retryAfterSeconds)}.`);
   }
 
-  const hash = clientHash(req.cookies.get('jodex_device')?.value, ip, req.headers.get('user-agent') ?? '');
+  // تقييم واحد كل 24 ساعة لكل دورة مياه: بحساب المستفيد إن كان مسجلًا، وإلا بجهازه
+  const user = await getSessionUser().catch(() => null);
+  const identity = feedbackIdentity({
+    userId: user?.id ?? null,
+    deviceId: req.cookies.get('jodex_device')?.value,
+    ip,
+    userAgent: req.headers.get('user-agent') ?? '',
+  });
+  const retry = await feedbackRetryAfter(identity.all, info.restroomId, now);
+  if (retry) throw new ApiError(429, 'too_soon', tooSoonMessage(retry), undefined, { retryAfterSeconds: retry });
+
   const { data, error } = await createServiceClient().rpc('submit_feedback_tx', {
-    p_token: params.token,
+    p_token: info.qrToken,
     p_rating: FEEDBACK_RATING_VALUE[body.rating],
     p_reason_keys: body.rating === 'bad' ? body.reasons : [],
     p_other_text: body.rating === 'bad' && body.reasons.includes('other') ? body.otherText : null,
-    p_client_hash: hash,
+    p_client_hash: identity.primary,
     p_now: now.toISOString(),
     p_window_minutes: FEEDBACK_WINDOW_MINUTES,
   });
@@ -45,11 +56,8 @@ export const POST = publicRoute<{ token: string }>(async ({ req, params, now }) 
     throw error;
   }
   if (!data?.ok) {
-    throw new ApiError(
-      429,
-      'too_soon',
-      `سبق أن قيّمت دورة المياه هذه قبل قليل. يمكنك التقييم مرة أخرى بعد ${minutesText(Number(data?.retry_after_seconds ?? 600))}.`,
-    );
+    const seconds = Number(data?.retry_after_seconds ?? FEEDBACK_WINDOW_MINUTES * 60);
+    throw new ApiError(429, 'too_soon', tooSoonMessage(seconds), undefined, { retryAfterSeconds: seconds });
   }
   return json({ ok: true, rating: body.rating, submittedAt: now.toISOString() }, { status: 201 });
 });

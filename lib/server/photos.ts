@@ -1,6 +1,7 @@
 import 'server-only';
 import sharp from 'sharp';
 import { MAX_PHOTO_BYTES } from '@/lib/domain/catalog';
+import { riyadhToInstant } from '@/lib/domain/time';
 import { ApiError } from './http';
 import { createServiceClient } from './supabase';
 
@@ -25,10 +26,16 @@ export const PHOTO_ERRORS = {
   type: 'نوع الملف غير مسموح. الأنواع المسموحة: JPEG وPNG وWebP وHEIC.',
   corrupt: 'تعذّر قراءة الصورة. جرّب صورة أخرى.',
   upload: 'تعذّر حفظ الصورة. أعد رفع الخانة.',
+  cameraOnly: 'صورة العمالة تُلتقط مباشرة بالكاميرا من داخل الصفحة، ولا يُقبل رفع صورة محفوظة على الجهاز.',
 } as const;
 
 /** قراءة ملف الصورة من طلب multipart مع التحقق من الحجم قبل القراءة */
 export async function readUploadedFile(req: Request): Promise<Buffer> {
+  return (await readUpload(req)).file;
+}
+
+/** الصورة مع مصدرها المعلن من الصفحة (camera = التقاط مباشر من نافذة الكاميرا) */
+export async function readUpload(req: Request): Promise<{ file: Buffer; source: string | null }> {
   const declared = Number(req.headers.get('content-length') ?? 0);
   if (declared > MAX_PHOTO_BYTES + 512 * 1024) throw new ApiError(413, 'too_large', PHOTO_ERRORS.tooLarge);
   let form: FormData;
@@ -41,7 +48,37 @@ export async function readUploadedFile(req: Request): Promise<Buffer> {
   if (!file || typeof file === 'string') throw new ApiError(422, 'missing_file', PHOTO_ERRORS.missing);
   if (file.size === 0) throw new ApiError(422, 'empty_file', PHOTO_ERRORS.empty);
   if (file.size > MAX_PHOTO_BYTES) throw new ApiError(413, 'too_large', PHOTO_ERRORS.tooLarge);
-  return Buffer.from(await file.arrayBuffer());
+  const source = form.get('source');
+  return { file: Buffer.from(await file.arrayBuffer()), source: typeof source === 'string' ? source : null };
+}
+
+/** أقصى عمر مقبول لتاريخ الالتقاط المسجّل داخل الصورة (EXIF) لخانة الالتقاط المباشر */
+export const CAPTURE_MAX_AGE_MINUTES = 15;
+
+/**
+ * تحقق الخادم لخانة «الالتقاط المباشر فقط»: الصفحة تلتقط الصورة من بث الكاميرا الحي وترسلها JPEG
+ * بلا بيانات وصفية مع source=camera. تُرفض الصورة إن لم تُعلَن ملتقطة بالكاميرا، أو كانت HEIC
+ * (صيغة معرض iPhone)، أو حملت تاريخ التقاط (EXIF) أقدم من 15 دقيقة — أي صورة محفوظة مسبقًا.
+ */
+export async function assertFreshCapture(input: Buffer, source: string | null, now: Date) {
+  if (source !== 'camera') throw new ApiError(422, 'camera_only', PHOTO_ERRORS.cameraOnly);
+  const { fileTypeFromBuffer } = await import('file-type');
+  const type = await fileTypeFromBuffer(input);
+  if (!type || !['image/jpeg', 'image/png', 'image/webp'].includes(type.mime)) throw new ApiError(422, 'camera_only', PHOTO_ERRORS.cameraOnly);
+  let exif: Buffer | undefined;
+  try {
+    exif = (await sharp(input).metadata()).exif;
+  } catch {
+    throw new ApiError(422, 'corrupt', PHOTO_ERRORS.corrupt);
+  }
+  if (!exif) return;
+  const stamps = [...exif.toString('latin1').matchAll(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/g)];
+  if (!stamps.length) return;
+  // تاريخ EXIF بالتوقيت المحلي للجهاز (الرياض)؛ يُعتمد أحدث تاريخ مسجّل
+  const latest = Math.max(
+    ...stamps.map((m) => riyadhToInstant(`${m[1]}-${m[2]}-${m[3]}`, Number(m[4]) * 60 + Number(m[5])).getTime()),
+  );
+  if (now.getTime() - latest > CAPTURE_MAX_AGE_MINUTES * 60_000) throw new ApiError(422, 'camera_only', PHOTO_ERRORS.cameraOnly);
 }
 
 /**

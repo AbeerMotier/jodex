@@ -14,7 +14,6 @@ import {
   closeAll,
   completeRound,
   monitorToday,
-  nextDate,
   REQUIRED_SLOTS,
   roundOf,
   submitRound,
@@ -34,19 +33,20 @@ test.afterAll(async () => {
   await closeAll(m1, admin);
 });
 
+// نافذة الصباحية 07:30–10:00 (ملتزم حتى 09:30)، والمسائية 12:00–14:30 (ملتزمة طوال نافذتها)
 const BOUNDARIES: { date: string; am: [string, string, number]; pm: [string, string, number] }[] = [
   { date: '2042-01-06', am: ['09:30', 'full', 100], pm: ['14:30', 'full', 100] },
-  { date: '2042-01-07', am: ['09:45', 'behind', 75], pm: ['14:45', 'behind', 75] },
-  { date: '2042-01-08', am: ['10:00', 'non', 50], pm: ['15:00', 'non', 50] },
-  { date: '2042-01-09', am: ['11:00', 'non', 20], pm: ['16:00', 'non', 20] },
+  { date: '2042-01-07', am: ['09:45', 'behind', 75], pm: ['12:00', 'full', 100] },
+  { date: '2042-01-08', am: ['10:00', 'non', 50], pm: ['13:30', 'full', 100] },
+  { date: '2042-01-09', am: ['07:30', 'full', 100], pm: ['12:30', 'full', 100] },
 ];
 
 test.describe('دالة الالتزام بالقيم الحدية (بدقة الدقيقة)', () => {
   for (const b of BOUNDARIES) {
     test(`صباحًا ${b.am[0]} ← ${b.am[1]} ${b.am[2]} · مساءً ${b.pm[0]} ← ${b.pm[1]} ${b.pm[2]}`, async () => {
       for (const [shift, [time, level, score], uploadAt] of [
-        ['am', b.am, '09:00'],
-        ['pm', b.pm, '13:10'],
+        ['am', b.am, '07:30'],
+        ['pm', b.pm, '12:00'],
       ] as const) {
         const { res } = await completeRound(m1, shift, { uploadAt: at(b.date, uploadAt), submitAt: at(b.date, time) });
         const body = await res.json();
@@ -59,19 +59,22 @@ test.describe('دالة الالتزام بالقيم الحدية (بدقة ا�
     });
   }
 
-  test('الدقيقة كاملة محسوبة: 09:30:59 ← ملتزم تمامًا، 16:00:59 ← غير ملتزم 20', async () => {
+  test('الدقيقة كاملة محسوبة: 09:30:59 ← ملتزم تمامًا، 10:00:59 و14:30:59 ← ما زالت مسموحة', async () => {
     const date = '2042-01-10';
-    const am = await completeRound(m1, 'am', { uploadAt: at(date, '09:00'), submitAt: at(date, '09:30', 59) });
-    expect(await am.res.json()).toMatchObject({ complianceLevel: 'full', complianceScore: 100 });
-    const pm = await completeRound(m1, 'pm', { uploadAt: at(date, '15:30'), submitAt: at(date, '16:00', 59) });
-    expect(await pm.res.json()).toMatchObject({ complianceLevel: 'non', complianceScore: 20 });
+    const am = await completeRound(m1, 'am', { uploadAt: at(date, '09:00'), submitAt: at(date, '10:00', 59) });
+    expect(await am.res.json()).toMatchObject({ complianceLevel: 'non', complianceScore: 50 });
+    const pm = await completeRound(m1, 'pm', { uploadAt: at(date, '14:00'), submitAt: at(date, '14:30', 59) });
+    expect(await pm.res.json()).toMatchObject({ complianceLevel: 'full', complianceScore: 100 });
+    const day2 = '2042-01-11';
+    const am2 = await completeRound(m1, 'am', { uploadAt: at(day2, '09:00'), submitAt: at(day2, '09:30', 59) });
+    expect(await am2.res.json()).toMatchObject({ complianceLevel: 'full', complianceScore: 100 });
   });
 
-  test('11:05 و16:05 ← رفض الإرسال وتُسجل الجولة «فائتة» بدرجة 0', async () => {
+  test('10:01 و14:31 ← رفض الإرسال وتُسجل الجولة «فائتة» بدرجة 0', async () => {
     const date = '2042-01-12';
     for (const [shift, uploadAt, late] of [
-      ['am', '10:30', '11:05'],
-      ['pm', '15:30', '16:05'],
+      ['am', '09:50', '10:01'],
+      ['pm', '14:00', '14:31'],
     ] as const) {
       const { res } = await completeRound(m1, shift, { uploadAt: at(date, uploadAt), submitAt: at(date, late) });
       expect(res.status()).toBe(409);
@@ -84,7 +87,7 @@ test.describe('دالة الالتزام بالقيم الحدية (بدقة ا�
   });
 });
 
-test('حالات الجولة غير المرسلة: 07:00 «لم تبدأ»، 09:00 «لم تكتمل»، 10:30 «متأخرة · لم تكتمل»', async () => {
+test('حالات الجولة غير المرسلة: 07:00 «لم تبدأ»، 09:00 «لم تكتمل»، 09:45 «متأخرة · لم تكتمل»، 10:01 «فائتة»', async () => {
   const date = '2042-01-13';
   const expectAm = async (time: string, label: string, badge: string) => {
     m1.at = at(date, time);
@@ -94,46 +97,41 @@ test('حالات الجولة غير المرسلة: 07:00 «لم تبدأ»، 0
   };
   await expectAm('07:00', 'لم تبدأ', 'ضمن الوقت');
   await expectAm('09:00', 'لم تكتمل', 'ضمن الوقت');
-  await expectAm('10:30', 'متأخرة · لم تكتمل', 'متأخر عن الخطة');
-  await expectAm('11:01', 'فائتة', 'غير ملتزم بالخطة');
+  await expectAm('09:45', 'متأخرة · لم تكتمل', 'متأخر عن الخطة');
+  await expectAm('10:01', 'فائتة', 'غير ملتزم بالخطة');
 });
 
-test('رفض الجولة الناقصة (بنود/صور)، والتنظيف العميق إلزامي في يومه فقط', async () => {
-  const settings = await admin.json<{ deepCleanWeekday: number }>(admin.get('/api/admin/settings'));
-  const deep = settings.deepCleanWeekday;
-  const normalDay = nextDate('2042-02-02', (wd) => wd !== deep);
-  const deepDay = nextDate(addDays(normalDay, 1), (wd) => wd === deep);
-
-  // يوم عادي
+test('رفض الجولة الناقصة (بنود/صور)، و«التنظيف العميق» ملغى فلا يُعرض ولا يُطلب في أي يوم', async () => {
+  const normalDay = '2042-02-02';
   m1.at = at(normalDay, '08:00');
   let data = await monitorToday(m1);
+  expect(data.items.deep).toHaveLength(0);
   expect(data.deep.required).toBe(false);
   let am = roundOf(data, 'am');
   await uploadRequiredPhotos(m1, am.id, REQUIRED_SLOTS.slice(0, 3));
-  let res = await submitRound(m1, am.id, answersFor(data, 'done', { deep: false }));
+  let res = await submitRound(m1, am.id, answersFor(data, 'done'));
   expect(res.status()).toBe(422);
-  expect((await res.json()).error).toMatchObject({ missingPhotos: ['toilets', 'general'] });
+  expect((await res.json()).error).toMatchObject({ missingPhotos: ['general', 'labor'] });
 
   await uploadRequiredPhotos(m1, am.id, REQUIRED_SLOTS.slice(3));
-  const partialAnswers = answersFor(data, 'done', { deep: false });
+  const partialAnswers = answersFor(data, 'done');
   delete partialAnswers[data.items.contractor[0].id];
   res = await submitRound(m1, am.id, partialAnswers);
   expect(res.status()).toBe(422);
   expect((await res.json()).error).toMatchObject({ missingItems: 1 });
 
-  res = await submitRound(m1, am.id, answersFor(data, 'done', { deep: false }));
+  res = await submitRound(m1, am.id, answersFor(data, 'done'));
   expect(res.status(), await res.text()).toBe(200);
 
-  // يوم التنظيف العميق
-  m1.at = at(deepDay, '08:00');
-  data = await monitorToday(m1);
-  expect(data.deep.required).toBe(true);
-  expect(data.items.deep.length).toBeGreaterThan(0);
+  // كل أيام الأسبوع: لا بنود تنظيف عميق
+  for (let i = 1; i <= 7; i++) {
+    m1.at = at(addDays(normalDay, i), '08:00');
+    data = await monitorToday(m1);
+    expect(data.items.deep).toHaveLength(0);
+    expect(data.deep.required).toBe(false);
+  }
   am = roundOf(data, 'am');
   await uploadRequiredPhotos(m1, am.id);
-  res = await submitRound(m1, am.id, answersFor(data, 'done', { deep: false }));
-  expect(res.status()).toBe(422);
-  expect((await res.json()).error).toMatchObject({ missingDeep: data.items.deep.length });
   res = await submitRound(m1, am.id, answersFor(data, 'done'));
   expect(res.status(), await res.text()).toBe(200);
 });
@@ -209,13 +207,17 @@ test('المسودة والجولة pending لا تُحتسب، والصور ت�
     expect(p.mime).toBe('image/jpeg');
   }
   // ملف ليس صورة (بامتداد صورة) يُرفض بالبصمة الثنائية
-  const fake = await m1.upload(`/api/monitor/rounds/${am.id}/photos/labor`, Buffer.from('%PDF-1.4 not an image'), 'fake.jpg');
+  const fake = await m1.upload(`/api/monitor/rounds/${am.id}/photos/entry`, Buffer.from('%PDF-1.4 not an image'), 'fake.jpg');
   expect(fake.status()).toBe(415);
 });
 
 test('المتصفح: المراقب يعبّئ الجولة ويرفع صورًا حقيقية ويرسل ← تظهر في السجل بحالة التزام صحيحة', async ({ browser }) => {
   const w = world();
   const date = '2042-01-22';
+  // صورة العمالة تُلتقط بالكاميرا داخل الصفحة (مختبرة بكاميرا وهمية في client-requirements.spec)؛ هنا تُرفع كالتقاط مباشر
+  m1.at = at(date, '09:05');
+  const today = await monitorToday(m1);
+  await uploadRequiredPhotos(m1, roundOf(today, 'am').id, ['labor']);
   const s = await browserAs(browser, w.users.m1, at(date, '09:10'), { width: 390, height: 844 });
   try {
     const page = s.page;
@@ -226,7 +228,8 @@ test('المتصفح: المراقب يعبّئ الجولة ويرفع صورً
     for (const group of await groups.all()) await group.locator('[data-answer="done"]').click();
     await expect(page.getByTestId('items-progress')).toHaveText(/^(\d+) من \1$/);
     let i = 0;
-    for (const slot of REQUIRED_SLOTS) {
+    await expect(page.getByTestId('photo-input-labor')).toHaveCount(0);
+    for (const slot of REQUIRED_SLOTS.filter((x) => x !== 'labor')) {
       await page.getByTestId(`photo-input-${slot}`).setInputFiles({ name: `${slot}.jpg`, mimeType: 'image/jpeg', buffer: await jpegWithGps(i++) });
     }
     await expect(page.getByTestId('photos-progress')).toHaveText('5 من 5 صور إلزامية', { timeout: 30_000 });

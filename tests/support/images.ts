@@ -15,3 +15,18 @@ export async function exifOf(buffer: Buffer) {
   const meta = await sharp(buffer).metadata();
   return { exif: meta.exif ?? null, format: meta.format, width: meta.width, height: meta.height };
 }
+
+/** صورة ملتقطة من بث الكاميرا الحي في الصفحة (JPEG من canvas بلا أي بيانات EXIF) */
+export async function cameraJpeg(seed = 0): Promise<Buffer> {
+  return sharp({ create: { width: 72, height: 96, channels: 3, background: { r: 80, g: 120 + (seed * 13) % 100, b: 110 } } })
+    .jpeg({ quality: 85 })
+    .toBuffer();
+}
+
+/** صورة محفوظة مسبقًا على الجهاز: تاريخ التقاط EXIF قديم */
+export async function galleryJpeg(dateTimeOriginal = '2026:01:15 10:20:30'): Promise<Buffer> {
+  return sharp({ create: { width: 72, height: 96, channels: 3, background: { r: 90, g: 90, b: 140 } } })
+    .withExif({ IFD0: { Make: 'Gallery', DateTime: dateTimeOriginal }, IFD2: { DateTimeOriginal: dateTimeOriginal } })
+    .jpeg({ quality: 85 })
+    .toBuffer();
+}

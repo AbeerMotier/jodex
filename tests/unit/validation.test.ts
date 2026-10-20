@@ -53,12 +53,12 @@ describe('قائمة «قبل الإرسال» لجولة المراقب', () =>
     { id: 'b', title: 'ب' },
   ];
   const deepItems = [{ id: 'd', title: 'د' }];
-  const allPhotos = ['tools', 'entry', 'sinks', 'toilets', 'general'] as const;
+  const allPhotos = ['tools', 'entry', 'sinks', 'general', 'labor'] as const;
 
-  it('بنود بلا إجابة وصور ناقصة تُعد', () => {
+  it('بنود بلا إجابة وصور ناقصة تُعد (بدون «المراحيض»، و«العمالة» إلزامية)', () => {
     const r = roundSubmissionIssues({ contractorItems, deepItems, deepRequired: false, answers: { a: 'done' }, photos: ['tools'] });
     expect(r.missingItems.map((i) => i.id)).toEqual(['b']);
-    expect(r.missingPhotos).toEqual(['entry', 'sinks', 'toilets', 'general']);
+    expect(r.missingPhotos).toEqual(['entry', 'sinks', 'general', 'labor']);
     expect(r.total).toBe(5);
   });
   it('التنظيف العميق إلزامي في يومه فقط', () => {
@@ -66,9 +66,10 @@ describe('قائمة «قبل الإرسال» لجولة المراقب', () =>
     expect(roundSubmissionIssues({ ...base, deepRequired: true }).missingDeep).toHaveLength(1);
     expect(roundSubmissionIssues({ ...base, deepRequired: false }).total).toBe(0);
   });
-  it('«العمالة» اختيارية', () => {
-    const r = roundSubmissionIssues({ contractorItems, deepItems, deepRequired: false, answers: { a: 'done', b: 'done' }, photos: allPhotos });
-    expect(r.total).toBe(0);
+  it('«العمالة» إلزامية، و«المراحيض» لم تعد مطلوبة', () => {
+    const r = roundSubmissionIssues({ contractorItems, deepItems, deepRequired: false, answers: { a: 'done', b: 'done' }, photos: ['tools', 'entry', 'sinks', 'general'] });
+    expect(r.missingPhotos).toEqual(['labor']);
+    expect(roundSubmissionIssues({ contractorItems, deepItems, deepRequired: false, answers: { a: 'done', b: 'done' }, photos: allPhotos }).total).toBe(0);
   });
 });
 

@@ -214,7 +214,8 @@ export const usernameField = z
   .toLowerCase()
   .regex(USERNAME_PATTERN, 'اسم المستخدم: من 2 إلى 32 حرفًا إنجليزيًا صغيرًا أو رقمًا أو . _ -');
 const fullNameField = z.string('أدخل الاسم.').trim().min(2, 'الاسم قصير جدًا.').max(120, 'الاسم طويل جدًا (120 حرفًا كحد أقصى).');
-const roleField = z.enum(['admin', 'supervisor', 'contractor_monitor'], 'اختر الدور.');
+const roleField = z.enum(['admin', 'supervisor', 'contractor_monitor', 'contractor'], 'اختر الدور.');
+const adminScopeField = z.enum(['full', 'limited'], 'اختر نطاق صلاحية الأدمن.');
 const monitorKindField = z.enum(['primary', 'substitute'], 'اختر نوع المراقب.').nullable();
 const idField = (message: string) => z.guid(message);
 
@@ -239,6 +240,7 @@ export const userCreateSchema = z
     role: roleField,
     monitorKind: monitorKindField.default(null),
     substituteForId: idField('اختر المراقب الأساسي.').nullable().default(null),
+    adminScope: adminScopeField.default('full'),
   })
   .superRefine(refineMonitorShape);
 export type UserCreateInput = z.infer<typeof userCreateSchema>;
@@ -251,6 +253,7 @@ export const userUpdateSchema = z
     monitorKind: monitorKindField.optional(),
     substituteForId: idField('اختر المراقب الأساسي.').nullable().optional(),
     isActive: z.boolean().optional(),
+    adminScope: adminScopeField.optional(),
   })
   .superRefine(refineMonitorShape);
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;

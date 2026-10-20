@@ -4,8 +4,9 @@ import { env } from '../env';
 import { createUserClient } from '../supabase';
 import { loadRestroomRefs } from './common';
 
-export async function qrSvg(url: string): Promise<string> {
-  return QRCode.toString(url, {
+/** رمز QR بمحتوى نصي فقط (ترميز دورة المياه، بلا رابط أو اسم أو بيانات إضافية) */
+export async function qrSvg(content: string): Promise<string> {
+  return QRCode.toString(content, {
     type: 'svg',
     errorCorrectionLevel: 'M',
     margin: 0,
@@ -13,11 +14,16 @@ export async function qrSvg(url: string): Promise<string> {
   });
 }
 
-export function publicRateUrl(token: string) {
-  return `${env.publicAppUrl}/r/${token}`;
+export function publicRateUrl(ref: string) {
+  return `${env.publicAppUrl}/r/${encodeURIComponent(ref)}`;
 }
 
-/** بطاقات رموز QR (رابط عشوائي غير قابل للتخمين لا يكشف معرّفات داخلية) */
+/** صفحة مسح الرمز بالكاميرا (رمز QR يحتوي الترميز فقط فلا يفتح رابطًا بنفسه) */
+export function scanPageUrl() {
+  return `${env.publicAppUrl}/scan`;
+}
+
+/** بطاقات رموز QR: محتوى الرمز = ترميز دورة المياه فقط */
 export async function listQrCards(buildingId?: string) {
   const client = await createUserClient();
   const rooms = await loadRestroomRefs(client);
@@ -29,13 +35,13 @@ export async function listQrCards(buildingId?: string) {
     if (buildingId && r.building_id !== buildingId) continue;
     const code = byRoom.get(r.id);
     if (!code) continue;
-    const url = publicRateUrl(code.token);
     cards.push({
       id: code.id,
       restroom: { id: r.id, code: r.code, name: r.name, floor: r.floor_label, building: r.building_name },
-      url,
-      displayUrl: url.replace(/^https?:\/\//, ''),
-      svg: await qrSvg(url),
+      url: publicRateUrl(r.code),
+      content: r.code,
+      scanUrl: scanPageUrl().replace(/^https?:\/\//, ''),
+      svg: await qrSvg(r.code),
     });
   }
   return { cards };
@@ -49,12 +55,12 @@ export async function qrCardById(id: string) {
   const rooms = await loadRestroomRefs(client, { includeInactive: true });
   const r = rooms.find((x) => x.id === code.restroom_id);
   if (!r) return null;
-  const url = publicRateUrl(code.token);
   return {
     id: code.id,
     restroom: { code: r.code, name: r.name, floor: r.floor_label, building: r.building_name },
-    url,
-    displayUrl: url.replace(/^https?:\/\//, ''),
-    svg: await qrSvg(url),
+    url: publicRateUrl(r.code),
+    content: r.code,
+    scanUrl: scanPageUrl().replace(/^https?:\/\//, ''),
+    svg: await qrSvg(r.code),
   };
 }

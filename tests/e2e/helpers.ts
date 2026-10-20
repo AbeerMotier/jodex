@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, request, type APIRequestContext, type APIResponse, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { jpegWithGps } from '../support/images';
+import { cameraJpeg, jpegWithGps } from '../support/images';
 import type { QaUser, QaWorld } from '../support/world';
 
 export { at, addDays, nextDate, weekdayOfDate } from '../support/time';
@@ -60,8 +60,8 @@ export class Api {
   delete(path: string, data?: unknown) {
     return this.ctx.delete(path, { headers: this.headers(), data: data ?? {} });
   }
-  upload(path: string, buffer: Buffer, name = 'photo.jpg', mimeType = 'image/jpeg') {
-    return this.ctx.post(path, { headers: this.headers(), multipart: { file: { name, mimeType, buffer } } });
+  upload(path: string, buffer: Buffer, name = 'photo.jpg', mimeType = 'image/jpeg', fields: Record<string, string> = {}) {
+    return this.ctx.post(path, { headers: this.headers(), multipart: { file: { name, mimeType, buffer }, ...fields } });
   }
   async json<T = unknown>(res: Promise<APIResponse> | APIResponse, status = 200): Promise<T> {
     const r = await res;
@@ -95,7 +95,7 @@ export interface TodayData {
   user: { name: string; isSubstitute: boolean };
 }
 
-export const REQUIRED_SLOTS = ['tools', 'entry', 'sinks', 'toilets', 'general'] as const;
+export const REQUIRED_SLOTS = ['tools', 'entry', 'sinks', 'general', 'labor'] as const;
 
 export async function monitorToday(api: Api): Promise<TodayData> {
   return api.json<TodayData>(api.get('/api/monitor/today'));
@@ -110,7 +110,11 @@ export function roundOf(data: TodayData, shift: 'am' | 'pm'): TodayRound {
 export async function uploadRequiredPhotos(api: Api, roundId: string, slots: readonly string[] = REQUIRED_SLOTS) {
   let i = 0;
   for (const slot of slots) {
-    const res = await api.upload(`/api/monitor/rounds/${roundId}/photos/${slot}`, await jpegWithGps(i++));
+    // «العمالة»: التقاط مباشر من الكاميرا في الصفحة (source=camera وبلا EXIF)
+    const res =
+      slot === 'labor'
+        ? await api.upload(`/api/monitor/rounds/${roundId}/photos/${slot}`, await cameraJpeg(i++), 'photo.jpg', 'image/jpeg', { source: 'camera' })
+        : await api.upload(`/api/monitor/rounds/${roundId}/photos/${slot}`, await jpegWithGps(i++));
     expect(res.status(), await res.text()).toBe(200);
   }
 }

@@ -26,7 +26,7 @@ const KIND_OPTIONS = [
   { value: 'supervisor', label: 'تقييمات المشرفين الميدانيين' },
 ];
 const PERIODS: Period[] = ['today', 'week', 'month'];
-const GRID = 'grid grid-cols-[104px_62px_minmax(160px,1.3fr)_104px_86px_minmax(118px,1fr)_92px_56px_136px] gap-2.5';
+const GRID = 'grid grid-cols-[104px_62px_minmax(160px,1.3fr)_104px_86px_minmax(118px,1fr)_minmax(150px,1fr)_92px_56px_136px] gap-2.5';
 const KEYS = ['kind', 'building', 'floor', 'restroom', 'status', 'employee'];
 
 export function LogView() {
@@ -75,7 +75,7 @@ export function LogView() {
 
       <section className="min-w-0 animate-fade-up rounded-[20px] border border-line bg-white py-2" data-testid="log-table">
         <div className="overflow-x-auto">
-          <div className="min-w-[1020px]">
+          <div className="min-w-[1190px]">
             <div className={`${GRID} px-5 py-3 text-[12px] font-semibold text-muted`} role="row">
               <span>التاريخ والوقت</span>
               <span>نوع الجولة</span>
@@ -83,6 +83,7 @@ export function LogView() {
               <span>المبنى</span>
               <span>الدور</span>
               <span>دورة المياه</span>
+              <span>ترميز دورة المياه</span>
               <span>نوع التقييم</span>
               <span>النتيجة</span>
               <span>الحالة</span>
@@ -127,11 +128,19 @@ export function LogView() {
                   <span>{r.restroom.building}</span>
                   <span>{r.restroom.floor}</span>
                   <span>{r.restroom.name}</span>
+                  <span dir="ltr" className="tabular text-right text-[12px]" data-testid="log-code">
+                    {r.restroom.code}
+                  </span>
                   <span className="text-muted">{r.evalType}</span>
                   <span className="tabular font-semibold">{fmtPct(r.result)}</span>
                   <span className="flex flex-wrap gap-1">
                     <Chip tone={r.status.tone}>{r.status.label}</Chip>
                     {r.urgent && <Chip tone="error">معالجة فورية</Chip>}
+                    {r.mismatch && (
+                      <Chip tone="warning" data-testid="log-mismatch">
+                        جولة المراقب غير مطابقة
+                      </Chip>
+                    )}
                   </span>
                 </button>
               ))}

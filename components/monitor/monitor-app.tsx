@@ -15,8 +15,10 @@ import { useApi } from '@/lib/client/use-api';
 import { ANSWER_LABEL, MAX_PHOTO_BYTES, WEEKDAY_LABEL, type PhotoSlot, type Tone } from '@/lib/domain/catalog';
 import { dayLabel, timeHM } from '@/lib/domain/format';
 import type { Answer } from '@/lib/domain/scoring';
-import type { Shift } from '@/lib/domain/schedule';
+import { shiftWindowState, type Shift } from '@/lib/domain/schedule';
+import { riyadhMinuteOfDay } from '@/lib/domain/time';
 import { roundSubmissionIssues } from '@/lib/domain/validation';
+import { CameraCapture } from './camera-capture';
 
 interface RoundView {
   id: string;
@@ -27,7 +29,7 @@ interface RoundView {
   displayLabel: string;
   tone: Tone;
   bar: number;
-  plan: { start: string; fullUntil: string; nonFrom: string; deadline: string };
+  plan: { start: string; fullUntil: string; nonFrom: string; deadline: string; hasLateBand?: boolean };
   complianceLevel: string | null;
   submittedAt: string | null;
   executedBy: string | null;
@@ -60,7 +62,7 @@ interface TodayData {
   defaultShift: Shift;
   deep: { required: boolean; weekday: number };
   items: { contractor: { id: string; title: string; description: string | null }[]; deep: { id: string; title: string; description: string | null }[] };
-  photoSlots: { slot: PhotoSlot; label: string; required: boolean }[];
+  photoSlots: { slot: PhotoSlot; label: string; required: boolean; cameraOnly?: boolean }[];
   rounds: RoundView[];
 }
 
@@ -75,7 +77,8 @@ interface SlotState {
   status: 'idle' | 'uploading' | 'error' | 'deleting';
   preview?: string;
   message?: string;
-  file?: File;
+  file?: File | Blob;
+  source?: 'camera';
 }
 
 const BAR_COLOR: Record<string, string> = {
@@ -109,6 +112,8 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<{ title: string; sub: string; meta: string } | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  /** خانة الصورة المفتوحة في نافذة الكاميرا (العمالة: التقاط مباشر فقط) */
+  const [cameraSlot, setCameraSlot] = useState<{ slot: PhotoSlot; label: string } | null>(null);
   const idemKeys = useRef<Record<string, string>>({});
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -219,26 +224,28 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
     });
   }, [data, round, form, photosFor]);
 
-  async function uploadPhoto(slot: PhotoSlot, file: File) {
+  async function uploadPhoto(slot: PhotoSlot, file: File | Blob, source?: 'camera') {
     if (!round) return;
     const key = `${round.id}:${slot}`;
-    if (!isAcceptedImage(file)) {
+    if (!source && (!(file instanceof File) || !isAcceptedImage(file))) {
       setSlots((s) => ({ ...s, [key]: { status: 'error', message: 'نوع الملف غير مسموح. الأنواع المسموحة: JPEG وPNG وWebP وHEIC.' } }));
       return;
     }
     const preview = URL.createObjectURL(file);
-    setSlots((s) => ({ ...s, [key]: { status: 'uploading', preview, file } }));
+    setSlots((s) => ({ ...s, [key]: { status: 'uploading', preview, file, source } }));
     try {
-      const blob = await compressImage(file);
+      // الصورة الملتقطة من الكاميرا مضغوطة مسبقًا (JPEG من البث الحي)
+      const blob = source === 'camera' || !(file instanceof File) ? file : await compressImage(file);
       if (blob.size > MAX_PHOTO_BYTES) throw new ApiClientError(413, 'too_large', 'حجم الصورة يتجاوز الحد المسموح (10 ميجابايت).');
       const fd = new FormData();
-      fd.append('file', blob, blob === file ? file.name : 'photo.jpg');
+      fd.append('file', blob, file instanceof File && blob === file ? file.name : 'photo.jpg');
+      if (source) fd.append('source', source);
       const res = await api<{ slot: PhotoSlot; url: string | null }>(`/api/monitor/rounds/${round.id}/photos/${slot}`, { form: fd });
       setPhotoOverride((o) => ({ ...o, [key]: { url: res.url ?? preview } }));
       setSlots((s) => ({ ...s, [key]: { status: 'idle' } }));
     } catch (e) {
       const err = e as ApiClientError;
-      setSlots((s) => ({ ...s, [key]: { status: 'error', message: err.message, file } }));
+      setSlots((s) => ({ ...s, [key]: { status: 'error', message: err.message, file, source } }));
       if (err.status === 409) reload();
     }
   }
@@ -306,6 +313,8 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
   if (!data) return null;
 
   const deepDayName = WEEKDAY_LABEL[data.deep.weekday];
+  // نافذة الجولة المعروضة الآن بتوقيت الرياض (الخادم يرفض أي عمل خارجها أيضًا)
+  const windowState = round ? shiftWindowState(round.shift, riyadhMinuteOfDay(now)) : 'open';
   const photos = round ? photosFor(round) : {};
   const requiredSlots = data.photoSlots.filter((s) => s.required);
   const uploadedRequired = requiredSlots.filter((s) => photos[s.slot]).length;
@@ -371,7 +380,12 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
               style={{ boxShadow: on ? '0 0 0 2px #2F4F44' : 'none' }}
             >
               <span className="flex w-full items-center justify-between gap-2">
-                <span className="text-[15px] font-semibold">{r.label}</span>
+                <span className="flex flex-col">
+                  <span className="text-[15px] font-semibold">{r.label}</span>
+                  <span className="tabular text-[12px] text-muted" data-testid={`shift-window-${r.shift}`}>
+                    {r.plan.start}–{r.plan.deadline}
+                  </span>
+                </span>
                 <Chip tone={r.tone} data-testid={`shift-status-${r.shift}`}>
                   {r.displayLabel}
                 </Chip>
@@ -401,7 +415,19 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
         </Card>
       )}
 
-      {round && round.status === 'pending' && form && (
+      {round && round.status === 'pending' && windowState !== 'open' && (
+        <Card className="animate-pop px-[22px] py-7 text-center" data-testid="round-window-closed">
+          <div className="mx-auto mb-3 flex h-[52px] w-[52px] items-center justify-center rounded-full text-[24px]" style={{ background: '#FBF4E1', color: '#94711C' }}>
+            ⏱
+          </div>
+          <div className="text-[18px] font-bold">{windowState === 'before' ? `لم يبدأ وقت ${round.label} بعد` : `انتهى وقت ${round.label}`}</div>
+          <div className="mt-1.5 text-[14px] leading-[1.7] text-muted">
+            {round.label} متاحة من <b className="tabular">{round.plan.start}</b> حتى <b className="tabular">{round.plan.deadline}</b> بتوقيت الرياض، ولا يمكن بدؤها أو إرسالها خارج هذا الوقت.
+          </div>
+        </Card>
+      )}
+
+      {round && round.status === 'pending' && windowState === 'open' && form && (
         <>
           <Card className="px-[18px] pt-1.5 pb-1">
             <div className="flex items-center justify-between pt-3.5 pb-2.5">
@@ -436,7 +462,7 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
                 {uploadedRequired} من {requiredSlots.length} صور إلزامية
               </span>
             </div>
-            <div className="mb-3.5 text-[13px] text-muted">التقط الصورة بالكاميرا أو اخترها من الجهاز، ويمكنك معاينتها أو استبدالها أو حذفها قبل الإرسال.</div>
+            <div className="mb-3.5 text-[13px] text-muted">التقط الصورة بالكاميرا أو اخترها من الجهاز، ويمكنك معاينتها أو استبدالها أو حذفها قبل الإرسال. صورة العمالة تُلتقط مباشرة بالكاميرا فقط.</div>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
               {data.photoSlots.map((s) => {
                 const key = `${round.id}:${s.slot}`;
@@ -449,12 +475,14 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
                     slot={s.slot}
                     label={s.label}
                     required={s.required}
+                    cameraOnly={Boolean(s.cameraOnly)}
                     url={url ?? null}
                     has={Boolean(photo) || st.status === 'uploading'}
                     state={st}
                     onFile={(f) => uploadPhoto(s.slot, f)}
+                    onCamera={() => setCameraSlot({ slot: s.slot, label: s.label })}
                     onDelete={() => deletePhoto(s.slot)}
-                    onRetry={() => st.file && uploadPhoto(s.slot, st.file)}
+                    onRetry={() => st.file && uploadPhoto(s.slot, st.file, st.source)}
                     onView={() => url && setLightbox(url)}
                   />
                 );
@@ -496,6 +524,16 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
         </>
       )}
 
+      <CameraCapture
+        open={Boolean(cameraSlot)}
+        title={`صورة ${cameraSlot?.label ?? ''}`}
+        onClose={() => setCameraSlot(null)}
+        onCapture={(blob) => {
+          const slot = cameraSlot?.slot;
+          setCameraSlot(null);
+          if (slot) uploadPhoto(slot, blob, 'camera');
+        }}
+      />
       <SuccessDialog open={Boolean(success)} title={success?.title ?? ''} sub={success?.sub ?? ''} meta={success?.meta} onClose={() => setSuccess(null)} />
       <Lightbox src={lightbox} onClose={() => setLightbox(null)} alt="صورة الجولة" />
     </main>
@@ -549,10 +587,12 @@ function PhotoTile({
   slot,
   label,
   required,
+  cameraOnly,
   url,
   has,
   state,
   onFile,
+  onCamera,
   onDelete,
   onRetry,
   onView,
@@ -560,10 +600,13 @@ function PhotoTile({
   slot: PhotoSlot;
   label: string;
   required: boolean;
+  /** التقاط مباشر من الكاميرا فقط (بلا اختيار ملف من الجهاز) */
+  cameraOnly: boolean;
   url: string | null;
   has: boolean;
   state: SlotState;
   onFile: (f: File) => void;
+  onCamera: () => void;
   onDelete: () => void;
   onRetry: () => void;
   onView: () => void;
@@ -594,15 +637,29 @@ function PhotoTile({
             )}
           </button>
           <div className="grid grid-cols-2 border-t border-line bg-white">
-            <label className="cursor-pointer border-l border-line px-1 py-[9px] text-center text-[12.5px] font-semibold text-ink">
-              استبدال
-              {input}
-            </label>
+            {cameraOnly ? (
+              <button type="button" onClick={onCamera} disabled={state.status !== 'idle'} className="border-l border-line px-1 py-[9px] text-center text-[12.5px] font-semibold text-ink" data-testid={`photo-camera-${slot}`}>
+                إعادة الالتقاط
+              </button>
+            ) : (
+              <label className="cursor-pointer border-l border-line px-1 py-[9px] text-center text-[12.5px] font-semibold text-ink">
+                استبدال
+                {input}
+              </label>
+            )}
             <button type="button" onClick={onDelete} disabled={state.status !== 'idle'} className="px-1 py-[9px] text-[12.5px] font-semibold text-err-ink">
               حذف
             </button>
           </div>
         </>
+      ) : cameraOnly ? (
+        <button type="button" onClick={onCamera} className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-1.5 bg-transparent p-2.5 text-center hover:bg-mint-5" data-testid={`photo-camera-${slot}`}>
+          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-mint-3 text-[18px] text-ink" aria-hidden>
+            📷
+          </span>
+          <span className="text-[13px] font-semibold">التقاط بالكاميرا</span>
+          <span className="text-[11.5px] text-muted">لا يُقبل رفع صورة محفوظة</span>
+        </button>
       ) : (
         <label className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-1.5 p-2.5 text-center hover:bg-mint-5">
           {input}

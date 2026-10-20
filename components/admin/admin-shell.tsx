@@ -15,14 +15,14 @@ const NAV = [
   { href: '/admin/notes', label: 'الملاحظات والإجراءات', count: 'notes' },
   { href: '/admin/staff', label: 'أداء الموظفين المتميزين', count: 'staff' },
   { href: '/admin/qr', label: 'رموز QR', count: 'qr' },
-  { href: '/admin/users', label: 'المستخدمون والصلاحيات', count: null },
-  { href: '/admin/restrooms', label: 'المباني ودورات المياه', count: null },
-  { href: '/admin/settings', label: 'الإعدادات والأوزان', count: null },
+  { href: '/admin/users', label: 'المستخدمون والصلاحيات', count: null, fullOnly: true },
+  { href: '/admin/restrooms', label: 'المباني ودورات المياه', count: null, fullOnly: true },
+  { href: '/admin/settings', label: 'الإعدادات والأوزان', count: null, fullOnly: true },
 ] as const;
 
 type Counts = Record<'log' | 'feedback' | 'notes' | 'staff' | 'qr', number>;
 
-function Sidebar({ adminName }: { adminName: string }) {
+function Sidebar({ adminName, fullAccess }: { adminName: string; fullAccess: boolean }) {
   const pathname = usePathname();
   const sp = useSearchParams();
   const storedPeriod = useStoredPeriod();
@@ -71,7 +71,7 @@ function Sidebar({ adminName }: { adminName: string }) {
         </button>
       </div>
       <nav id="admin-nav" className={`relative z-[1] flex-col gap-1 ${open ? 'flex' : 'hidden'} md:flex`} aria-label="لوحة التحكم">
-        {NAV.map((n) => {
+        {NAV.filter((n) => fullAccess || !('fullOnly' in n)).map((n) => {
           const active = n.href === '/admin' ? pathname === '/admin' : pathname.startsWith(n.href);
           const value = n.count && counts ? counts[n.count] : null;
           return (
@@ -108,11 +108,11 @@ function Sidebar({ adminName }: { adminName: string }) {
 }
 
 /** لوحة الأدمن: شريط جانبي أخضر يمين الشاشة ومحتوى مرن */
-export function AdminShell({ adminName, children }: { adminName: string; children: ReactNode }) {
+export function AdminShell({ adminName, fullAccess = true, children }: { adminName: string; fullAccess?: boolean; children: ReactNode }) {
   return (
     <div className="flex min-h-dvh animate-[fadeIn_.3s_ease_both] flex-col md:flex-row">
       <Suspense fallback={<aside className="bg-brand md:h-dvh md:w-[260px]" />}>
-        <Sidebar adminName={adminName} />
+        <Sidebar adminName={adminName} fullAccess={fullAccess} />
       </Suspense>
       <div className="flex min-w-0 flex-1 flex-col gap-[18px] px-4 pt-[22px] pb-[60px] md:px-[22px]">{children}</div>
     </div>

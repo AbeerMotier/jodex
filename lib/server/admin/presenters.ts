@@ -17,6 +17,8 @@ export interface EntryView {
   result: number | null;
   status: { label: string; tone: Tone };
   urgent: boolean;
+  /** المشرف أجاب «لا» عن «هل جولة المراقب المسجلة مطابقة للواقع؟» */
+  mismatch?: boolean;
 }
 
 export function roomView(rooms: Map<string, RestroomRef>, id: string) {
@@ -84,6 +86,7 @@ export function evaluationEntry(
     result: e.score,
     status: { label: 'مكتملة', tone: 'success' },
     urgent: e.needs_urgent === 'yes',
+    mismatch: e.matches_round === 'no',
   };
 }
 

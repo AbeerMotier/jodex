@@ -4,6 +4,7 @@
  * - الجولة تدخل نسبة الالتزام فقط عندما تكون مُرسلة أو «فائتة» (درجة 0).
  * - قواعد الالتزام لا تُطبَّق على تقييمات المشرفين.
  */
+import { FEEDBACK_MAX_WEIGHT, FEEDBACK_WEIGHT } from './catalog';
 import { SHIFT_PLAN, isPendingLate, type ComplianceLevel, type RoundStatus, type Shift } from './schedule';
 import { riyadhToInstant } from './time';
 
@@ -28,6 +29,8 @@ export interface MetricEvaluation {
   supervisor_id: string;
   submitted_at: string;
   score: number | null;
+  /** إجابة «هل جولة المراقب المسجلة مطابقة للواقع؟» */
+  matches_round?: 'yes' | 'no' | null;
 }
 
 export interface FeedbackCount {
@@ -103,14 +106,23 @@ export interface FeedbackStats {
   satisfaction: number | null;
 }
 
-/** رضا المستفيدين = نسبة تقييمات ممتاز وجيد من الكل */
+/**
+ * مؤشر رضا المستفيدين بالأوزان: ممتاز 60، جيد 30، سيئ 10،
+ * والنسبة على أساس أعلى وزن: مجموع الأوزان ÷ (عدد التقييمات × 60) × 100.
+ */
+export function satisfactionIndex(excellent: number, good: number, bad: number): number | null {
+  const total = excellent + good + bad;
+  const points = excellent * FEEDBACK_WEIGHT.excellent + good * FEEDBACK_WEIGHT.good + bad * FEEDBACK_WEIGHT.bad;
+  return percent(points, total * FEEDBACK_MAX_WEIGHT);
+}
+
 export function feedbackStats(counts: FeedbackCount[]): FeedbackStats {
   const sum = (rating: number) => counts.filter((c) => c.rating === rating).reduce((s, c) => s + c.total, 0);
   const excellent = sum(5);
   const good = sum(4);
   const bad = sum(1);
   const total = excellent + good + bad;
-  return { total, excellent, good, bad, satisfaction: percent(excellent + good, total) };
+  return { total, excellent, good, bad, satisfaction: satisfactionIndex(excellent, good, bad) };
 }
 
 export interface ComplianceRates {
@@ -207,7 +219,7 @@ export interface MonitorPerformance {
   cp: number | null;
   /** متوسط جودة جولاته المكتملة */
   a: number | null;
-  /** متوسط تقييم المشرف لنفس المواقع */
+  /** متوسط تقييم المشرف لنفس المواقع (عدا التقييمات التي أجاب فيها المشرف بعدم مطابقة جولة المراقب للواقع) */
   s: number | null;
   /** الجودة = متوسط المتاح من (a, s) — أو a فقط عند فلتر «تقييم المقاول» */
   q: number | null;
@@ -229,7 +241,8 @@ export function monitorPerformance(
     const cp = average(mine.filter(isDue).map((r) => r.compliance_score));
     const a = contractorAverage(mine);
     const rooms = new Set(m.restroom_ids);
-    const s = supervisorAverage(evaluations.filter((e) => rooms.has(e.restroom_id)));
+    // «جولة المراقب غير مطابقة للواقع» لا تدخل في أداء المتميزين ولا تخفض تقييمهم
+    const s = supervisorAverage(evaluations.filter((e) => rooms.has(e.restroom_id) && e.matches_round !== 'no'));
     const q = mode === 'contractor' ? a : average([a, s]);
     return {
       monitorId: m.id,

@@ -4,11 +4,12 @@ import { embeddedFontCss } from './pdf';
 
 /**
  * بطاقة QR للطباعة (A5 عمودي) بنفس تصميم بطاقة صفحة «رموز QR»:
- * رأس أخضر بالشعار، رمز QR حقيقي بإطار زوايا، «امسح لتقييم النظافة»، اسم الدورة والموقع والرابط.
+ * رأس أخضر بالشعار، رمز QR حقيقي بإطار زوايا (محتواه ترميز دورة المياه فقط)،
+ * «امسح لتقييم النظافة»، ثم «دورة مياه» وتحتها الترميز، وعنوان صفحة المسح.
  */
-export async function qrCardDocument(card: { svg: string; name: string; location: string; displayUrl: string }): Promise<string> {
+export async function qrCardDocument(card: { svg: string; code: string; scanUrl: string }): Promise<string> {
   const fonts = await embeddedFontCss();
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(card.name)} — رمز QR</title><style>
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(card.code)} — رمز QR</title><style>
 ${fonts}
 @page{size:A5 portrait;margin:0}
 *{box-sizing:border-box}
@@ -38,7 +39,7 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;color:#2F4F44;display:flex;al
 .body{display:flex;flex-direction:column;align-items:center;gap:12px;padding:22px 22px 26px}
 .chip{background:#E6F2EA;color:#3F7A62;border-radius:999px;padding:5px 18px;font-size:17px;font-weight:600}
 .name{font-size:24px;font-weight:700}
-.loc{font-size:16px;color:#687D74;margin-top:2px}
+.rcode{direction:ltr;font-size:21px;font-weight:700;letter-spacing:.5px;margin-top:4px;font-variant-numeric:tabular-nums}
 .url{direction:ltr;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#687D74;word-break:break-all;max-width:100%}
 </style></head><body>
 <div class="card">
@@ -48,8 +49,8 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;color:#2F4F44;display:flex;al
   <div class="qr"><span class="c tr"></span><span class="c tl"></span><span class="c br"></span><span class="c bl"></span><div class="code">${card.svg}</div></div>
   <div class="body">
     <span class="chip">امسح لتقييم النظافة</span>
-    <div><div class="name">${esc(card.name)}</div><div class="loc">${esc(card.location)}</div></div>
-    <div class="url">${esc(card.displayUrl)}</div>
+    <div><div class="name">دورة مياه</div><div class="rcode">${esc(card.code)}</div></div>
+    <div class="url">${esc(card.scanUrl)}</div>
   </div>
 </div>
 </body></html>`;

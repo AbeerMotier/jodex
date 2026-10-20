@@ -24,7 +24,7 @@ export interface QaRoom {
   qrId: string;
 }
 export type RoomKey = 'a' | 'b' | 'c';
-export type UserKey = 'admin' | 'm1' | 'm2' | 'm3' | 'sub' | 'sup' | 'sup2';
+export type UserKey = 'admin' | 'm1' | 'm2' | 'm3' | 'sub' | 'sup' | 'sup2' | 'lim' | 'con';
 export interface QaWorld {
   runId: string;
   building: { id: string; name: string };
@@ -82,6 +82,8 @@ export async function createQaWorld(label = 'QA'): Promise<QaWorld> {
   await add('sub', { username: `qa${lower}.sub`, full_name: 'نائب الاختبار', role: 'contractor_monitor', monitor_kind: 'substitute', substitute_for_id: users.m1.id });
   await add('sup', { ...base, username: `qa${lower}.sup`, full_name: 'مشرف الاختبار', role: 'supervisor' });
   await add('sup2', { ...base, username: `qa${lower}.sup2`, full_name: 'مشرف الاختبار الثاني', role: 'supervisor' });
+  await add('lim', { ...base, username: `qa${lower}.lim`, full_name: 'أدمن محدود الاختبار', role: 'admin', admin_scope: 'limited' });
+  await add('con', { ...base, username: `qa${lower}.con`, full_name: 'مقاول الاختبار', role: 'contractor' });
 
   const assign = await svc.from('supervisor_assignments').insert([
     { supervisor_id: users.sup.id, restroom_id: rooms.a.id },
@@ -89,6 +91,11 @@ export async function createQaWorld(label = 'QA'): Promise<QaWorld> {
     { supervisor_id: users.sup2.id, restroom_id: rooms.c.id },
   ]);
   if (assign.error) throw new Error(`assignments: ${assign.error.message}`);
+  const conAssign = await svc.from('contractor_assignments').insert([
+    { contractor_id: users.con.id, restroom_id: rooms.a.id },
+    { contractor_id: users.con.id, restroom_id: rooms.c.id },
+  ]);
+  if (conAssign.error) throw new Error(`contractor assignments: ${conAssign.error.message}`);
 
   return { runId, building, rooms, users };
 }

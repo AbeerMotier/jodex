@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiClientError } from '@/lib/client/api';
 import { useApi } from '@/lib/client/use-api';
-import { ROLE_LABEL, type MonitorKind, type Role } from '@/lib/domain/catalog';
+import { ADMIN_SCOPE_LABEL, ROLE_LABEL, type AdminScope, type MonitorKind, type Role } from '@/lib/domain/catalog';
 import { userCreateSchema, userUpdateSchema } from '@/lib/domain/validation';
 import { BTN_PRIMARY, BTN_SMALL, DialogActions, Field, INPUT, PasswordDialog, RestroomChecklist, type PickRoom } from './manage-ui';
 import { PageHeader } from './page-header';
@@ -22,6 +22,7 @@ interface UserView {
   substituteForId: string | null;
   substituteForName: string | null;
   isActive: boolean;
+  adminScope: AdminScope | null;
   restroomIds: string[];
 }
 interface Room {
@@ -44,12 +45,18 @@ const ROLE_TABS: { value: Role | 'all'; label: string }[] = [
   { value: 'admin', label: 'الأدمن' },
   { value: 'supervisor', label: 'المشرفون الميدانيون' },
   { value: 'contractor_monitor', label: 'مراقبو المقاول' },
+  { value: 'contractor', label: 'المقاول' },
 ];
 
-const ROLE_TONE: Record<Role, 'brand' | 'supervisor' | 'monitor'> = { admin: 'brand', supervisor: 'supervisor', contractor_monitor: 'monitor' };
+const ROLE_TONE: Record<Role, 'brand' | 'supervisor' | 'monitor' | 'neutral'> = {
+  admin: 'brand',
+  supervisor: 'supervisor',
+  contractor_monitor: 'monitor',
+  contractor: 'neutral',
+};
 
 function assignable(u: UserView) {
-  return u.role === 'supervisor' || (u.role === 'contractor_monitor' && u.monitorKind === 'primary');
+  return u.role === 'supervisor' || u.role === 'contractor' || (u.role === 'contractor_monitor' && u.monitorKind === 'primary');
 }
 
 function detailText(u: UserView) {
@@ -58,7 +65,8 @@ function detailText(u: UserView) {
     return u.restroomIds.length ? `مسؤول عن ${u.restroomIds.length} دورة مياه` : 'لا توجد دورات مياه مسندة';
   }
   if (u.role === 'supervisor') return u.restroomIds.length ? `يقيّم ${u.restroomIds.length} موقعًا` : 'لا توجد مواقع مسندة';
-  return 'كل الصلاحيات';
+  if (u.role === 'contractor') return u.restroomIds.length ? `${u.restroomIds.length} دورة مياه مسندة (عرض فقط)` : 'لا توجد دورات مياه مسندة';
+  return u.adminScope === 'limited' ? ADMIN_SCOPE_LABEL.limited : 'كل الصلاحيات';
 }
 
 export function UsersView() {
@@ -98,7 +106,7 @@ export function UsersView() {
   }
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: 0, admin: 0, supervisor: 0, contractor_monitor: 0 };
+    const c: Record<string, number> = { all: 0, admin: 0, supervisor: 0, contractor_monitor: 0, contractor: 0 };
     for (const u of data?.users ?? []) {
       if (!showInactive && !u.isActive) continue;
       c.all++;
@@ -264,6 +272,7 @@ function UserDialog({
   const [role, setRole] = useState<Role>('contractor_monitor');
   const [kind, setKind] = useState<MonitorKind>('primary');
   const [substituteFor, setSubstituteFor] = useState('');
+  const [adminScope, setAdminScope] = useState<AdminScope>('full');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -278,12 +287,14 @@ function UserDialog({
       setRole('contractor_monitor');
       setKind('primary');
       setSubstituteFor('');
+      setAdminScope('full');
     } else {
       setUsername(target.username);
       setFullName(target.fullName);
       setRole(target.role);
       setKind(target.monitorKind ?? 'primary');
       setSubstituteFor(target.substituteForId ?? '');
+      setAdminScope(target.adminScope ?? 'full');
     }
   } else if (!target && openedFor) {
     setOpenedFor(null);
@@ -299,6 +310,7 @@ function UserDialog({
       role,
       monitorKind: isMonitor ? kind : null,
       substituteForId: isMonitor && kind === 'substitute' ? substituteFor || null : null,
+      ...(role === 'admin' ? { adminScope } : {}),
     };
     const parsed = (isNew ? userCreateSchema : userUpdateSchema).safeParse(payload);
     if (!parsed.success) {
@@ -336,13 +348,27 @@ function UserDialog({
         </Field>
         <Field label="الدور" error={errors.role}>
           <select value={role} onChange={(e) => setRole(e.target.value as Role)} className={INPUT} data-testid="user-role">
-            {(['admin', 'supervisor', 'contractor_monitor'] as Role[]).map((r) => (
+            {(['admin', 'supervisor', 'contractor_monitor', 'contractor'] as Role[]).map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABEL[r]}
               </option>
             ))}
           </select>
         </Field>
+        {role === 'admin' && (
+          <Field label="صلاحيات الأدمن" error={errors.adminScope} hint="المحدود يرى كل صفحات الأدمن ويستخدمها عدا المستخدمين والصلاحيات والمباني ودورات المياه والإعدادات والأوزان.">
+            <select value={adminScope} onChange={(e) => setAdminScope(e.target.value as AdminScope)} className={INPUT} data-testid="user-admin-scope">
+              {(['full', 'limited'] as AdminScope[]).map((s) => (
+                <option key={s} value={s}>
+                  {ADMIN_SCOPE_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {role === 'contractor' && (
+          <div className="rounded-[10px] bg-[#F6F9F7] px-3 py-2 text-[12.5px] text-muted">المقاول يرى دورات المياه المسندة إليه للعرض فقط؛ تُسند من زر «دورات المياه».</div>
+        )}
         {isMonitor && (
           <Field label="نوع المراقب" error={errors.monitorKind} hint={kind === 'primary' ? 'المراقب الأساسي تُسند له دورات المياه من زر «دورات المياه».' : 'النائب يعمل على دورات مياه المراقب الأساسي الذي ينوب عنه.'}>
             <select value={kind} onChange={(e) => setKind(e.target.value as MonitorKind)} className={INPUT} data-testid="user-kind">
@@ -410,8 +436,20 @@ function LinkDialog({ user, data, onClose, onSaved }: { user: UserView | null; d
     <Modal
       open={Boolean(user)}
       onClose={onClose}
-      title={isMonitor ? `دورات المياه المسؤول عنها: ${user?.fullName ?? ''}` : `المواقع التي يقيّمها: ${user?.fullName ?? ''}`}
-      subtitle={isMonitor ? 'لكل دورة مياه مراقب أساسي واحد؛ اختيار دورة مسندة لغيره ينقلها إليه.' : 'يمكن أن يقيّم أكثر من مشرف نفس الموقع.'}
+      title={
+        isMonitor
+          ? `دورات المياه المسؤول عنها: ${user?.fullName ?? ''}`
+          : user?.role === 'contractor'
+            ? `دورات المياه المسندة للمقاول: ${user?.fullName ?? ''}`
+            : `المواقع التي يقيّمها: ${user?.fullName ?? ''}`
+      }
+      subtitle={
+        isMonitor
+          ? 'لكل دورة مياه مراقب أساسي واحد؛ اختيار دورة مسندة لغيره ينقلها إليه.'
+          : user?.role === 'contractor'
+            ? 'يراها المقاول في صفحته للعرض فقط.'
+            : 'يمكن أن يقيّم أكثر من مشرف نفس الموقع.'
+      }
       width={620}
     >
       <div className="flex flex-col gap-3" data-testid="link-dialog">

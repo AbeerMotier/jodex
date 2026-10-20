@@ -12,7 +12,7 @@ import { QrCardFace } from './qr-card';
 import { Toolbar } from './toolbar';
 
 interface QrData {
-  cards: { id: string; restroom: { code: string; name: string; floor: string; building: string }; url: string; displayUrl: string; svg: string }[];
+  cards: { id: string; restroom: { code: string; name: string; floor: string; building: string }; url: string; content: string; scanUrl: string; svg: string }[];
 }
 
 export function QrView() {
@@ -38,7 +38,7 @@ export function QrView() {
     <>
       <PageHeader
         title="رموز QR"
-        sub="لكل دورة مياه رمز خاص بها. امسح الرمز لتقييم نظافة دورة المياه مباشرة، دون تسجيل دخول."
+        sub="لكل دورة مياه رمز خاص بها يحتوي ترميزها فقط. يُمسح الرمز من صفحة المسح لتقييم النظافة دون تسجيل دخول."
         actions={
           <Toolbar
             filters={<LocationFilters building={building} floor="" restroom="" showFloor={false} showRestroom={false} onChange={(p) => f.set({ building: p.building })} />}
@@ -59,7 +59,10 @@ export function QrView() {
         {data?.cards.length === 0 && <div className="text-[13.5px] text-muted">لا توجد رموز QR مطابقة.</div>}
         {data?.cards.map((q) => (
           <div key={q.id} className="relative flex flex-col items-center overflow-hidden rounded-[22px] border border-line bg-white pb-4 text-center shadow-[0_10px_26px_-18px_rgba(47,79,68,.4)]" data-testid="qr-card">
-            <QrCardFace svg={q.svg} name={q.restroom.name} location={`${q.restroom.floor} · ${q.restroom.building}`} displayUrl={q.displayUrl} />
+            <QrCardFace svg={q.svg} code={q.restroom.code} scanUrl={q.scanUrl} />
+            <div className="mt-1 px-4 text-[12px] text-muted" data-testid="qr-location">
+              {q.restroom.name} · {q.restroom.floor} · {q.restroom.building}
+            </div>
             <div className="mt-2 grid w-full grid-cols-2 gap-1.5 px-4">
               <a href={q.url} target="_blank" rel="noopener noreferrer" className="touch-target flex items-center justify-center rounded-[9px] bg-ink px-1.5 py-[9px] text-[12.5px] font-semibold text-white no-underline hover:text-white" data-testid="qr-open">
                 فتح صفحة التقييم

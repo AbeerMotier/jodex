@@ -1,8 +1,10 @@
 'use client';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { QrScanner } from '@/components/common/qr-scanner';
 import { Card, MissingList } from '@/components/ui/card';
 import { Avatar, GreenHero, InfoTile } from '@/components/ui/hero';
-import { Lightbox, SuccessDialog } from '@/components/ui/overlay';
+import { Lightbox, Modal, SuccessDialog } from '@/components/ui/overlay';
 import { Skeleton, SkeletonCard } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/ui/toast';
@@ -38,7 +40,6 @@ interface EvalForm {
 }
 
 const EMPTY_FORM: EvalForm = { ratings: {}, matchesRound: null, needsUrgent: null, note: '' };
-const SITE_KEY = 'jodex:supervisor:site';
 const formKey = (userId: string, evalId: string) => `jodex:eval:${userId}:${evalId}`;
 
 function loadForm(userId: string, evalId: string): EvalForm {
@@ -52,6 +53,8 @@ function loadForm(userId: string, evalId: string): EvalForm {
 
 export function SupervisorApp({ userId, initialSiteId = null }: { userId: string; initialSiteId?: string | null }) {
   const toast = useToast();
+  const router = useRouter();
+  const [scanning, setScanning] = useState(false);
   const { data, error, loading, reload } = useApi<SitesData>('/api/supervisor/sites');
   const now = useServerClock(data?.serverNow, 15_000);
   const [siteId, setSiteId] = useState<string | null>(null);
@@ -69,28 +72,20 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
   const [success, setSuccess] = useState<{ title: string; sub: string; meta: string } | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
 
-  // اختيار الموقع: موقع رمز QR الممسوح، أو آخر موقع مستخدم، أو الأول من المواقع المسندة (عند أول تحميل)
-  if (data && siteId === null) {
-    let saved: string | null = null;
-    try {
-      saved = localStorage.getItem(SITE_KEY);
-    } catch {
-      saved = null;
-    }
+  // الموقع المراد تقييمه محدد ولا يُختار من القائمة: موقع رمز QR الممسوح، أو الموقع الوحيد المسند للمشرف
+  // (يُعاد التحديد عند مسح رمز جديد في الصفحة نفسها)
+  const [resolvedFor, setResolvedFor] = useState<string | null | undefined>(undefined);
+  if (data && resolvedFor !== initialSiteId) {
+    setResolvedFor(initialSiteId);
     const scanned = initialSiteId ? data.sites.find((s) => s.id === initialSiteId) : undefined;
     if (initialSiteId && !scanned) toast.show('دورة المياه التي مسحت رمزها ليست ضمن المواقع المسندة إليك.', 'error');
-    const pick = scanned ?? data.sites.find((s) => s.id === saved) ?? data.sites[0];
+    const pick = scanned ?? (data.sites.length === 1 ? data.sites[0] : undefined);
     if (pick) setSiteId(pick.id);
   }
 
-  // بدء (أو استئناف) تقييم الموقع المختار على الخادم
+  // بدء (أو استئناف) تقييم الموقع المحدد على الخادم (يتحقق الخادم أنه مسند للمشرف)
   useEffect(() => {
     if (!siteId) return;
-    try {
-      localStorage.setItem(SITE_KEY, siteId);
-    } catch {
-      /* تجاهل */
-    }
     let cancelled = false;
     api<Evaluation>('/api/supervisor/evaluations/start', { body: { restroomId: siteId } })
       .then((res) => {
@@ -305,6 +300,7 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
               <InfoTile label="المبنى" value={site.building} />
               <InfoTile label="الدور" value={site.floor} />
               <InfoTile label="دورة المياه" value={site.name} />
+              <InfoTile label="ترميز دورة المياه" value={<span dir="ltr" className="tabular">{site.code}</span>} />
               <InfoTile label="التاريخ" value={dayLabel(data.today)} />
               <InfoTile label="الوقت" value={<span className="tabular">{timeHM(now)}</span>} />
             </div>
@@ -312,28 +308,75 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
         </div>
       </GreenHero>
 
-      {data.sites.length > 1 && (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-[18px]">
-          <label htmlFor="site" className="text-[15px] font-bold">
-            الموقع المراد تقييمه
-          </label>
-          <select
-            id="site"
-            value={siteId ?? ''}
-            onChange={(e) => setSiteId(e.target.value)}
-            data-testid="site-select"
-            className="touch-target min-w-[240px] flex-1 rounded-[11px] border border-line bg-white px-3 text-[14px] outline-ink"
-          >
-            {data.sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} · {s.floor} · {s.building}
-              </option>
-            ))}
-          </select>
-        </Card>
-      )}
+      <Card className="flex flex-col gap-3 p-[18px]" data-testid="site-card">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="m-0 text-[15px] font-bold">الموقع المراد تقييمه</h2>
+          <button type="button" onClick={() => setScanning(true)} className="touch-target rounded-[11px] border border-line bg-white px-3.5 py-2 text-[13.5px] font-semibold text-ink hover:border-[#8FB8A2]" data-testid="scan-site">
+            مسح رمز QR لدورة المياه
+          </button>
+        </div>
+        {site ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] border-collapse text-right text-[13.5px]" data-testid="site-table">
+              <thead>
+                <tr className="text-[12px] text-muted">
+                  <th className="py-1.5 font-semibold">المبنى</th>
+                  <th className="py-1.5 font-semibold">الدور</th>
+                  <th className="py-1.5 font-semibold">دورة المياه</th>
+                  <th className="py-1.5 font-semibold">ترميز دورة المياه</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-divider">
+                  <td className="py-2">{site.building}</td>
+                  <td className="py-2">{site.floor}</td>
+                  <td className="py-2 font-semibold">{site.name}</td>
+                  <td className="py-2">
+                    <span dir="ltr" className="tabular">
+                      {site.code}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="rounded-[12px] bg-[#F6F9F7] px-3.5 py-3 text-[13.5px] leading-[1.7] text-ink-2" data-testid="scan-prompt">
+            امسح رمز QR الملصق على دورة المياه لبدء تقييمها. لا يمكن اختيار الموقع من القائمة.
+          </div>
+        )}
+        <details className="text-[13px]" data-testid="assigned-sites">
+          <summary className="cursor-pointer font-semibold text-ink-2">المواقع المسندة إليك ({data.sites.length}) — للعرض فقط</summary>
+          <div className="mt-2 max-h-[300px] overflow-auto rounded-[10px] border border-line">
+            <table className="w-full min-w-[480px] border-collapse text-right text-[12.5px]">
+              <thead className="sticky top-0 bg-white">
+                <tr className="text-muted">
+                  <th className="px-3 py-1.5 font-semibold">المبنى</th>
+                  <th className="px-3 py-1.5 font-semibold">الدور</th>
+                  <th className="px-3 py-1.5 font-semibold">دورة المياه</th>
+                  <th className="px-3 py-1.5 font-semibold">ترميز دورة المياه</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.sites.map((s) => (
+                  <tr key={s.id} className="border-t border-divider" style={s.id === siteId ? { background: '#E6F2EA' } : undefined}>
+                    <td className="px-3 py-1.5">{s.building}</td>
+                    <td className="px-3 py-1.5">{s.floor}</td>
+                    <td className="px-3 py-1.5">{s.name}</td>
+                    <td className="px-3 py-1.5">
+                      <span dir="ltr" className="tabular">
+                        {s.code}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </Card>
 
-      {evalLoading || !evaluation ? (
+      {!siteId ? null : evalLoading || !evaluation ? (
         <SkeletonCard lines={6} />
       ) : (
         <>
@@ -518,6 +561,17 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
         </>
       )}
 
+      <Modal open={scanning} onClose={() => setScanning(false)} title="مسح رمز QR لدورة المياه" subtitle="يُفتح تقييم دورة المياه التي تمسح رمزها" width={460}>
+        <div className="pb-3">
+          <QrScanner
+            active={scanning}
+            onResult={(ref) => {
+              setScanning(false);
+              router.push(`/go/${encodeURIComponent(ref)}`);
+            }}
+          />
+        </div>
+      </Modal>
       <ContractorRoundsModal open={roundsOpen} onClose={() => setRoundsOpen(false)} data={rounds} loading={roundsLoading} error={roundsError} />
       <SuccessDialog open={Boolean(success)} title={success?.title ?? ''} sub={success?.sub ?? ''} meta={success?.meta} onClose={() => setSuccess(null)} />
       <Lightbox src={lightbox} onClose={() => setLightbox(null)} alt="صورة المشرف" />

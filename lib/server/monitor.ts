@@ -1,6 +1,6 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
-import { BADGE_STATUS, DISPLAY_STATUS, PHOTO_SLOTS, SHIFT_LABEL, type PhotoSlot } from '@/lib/domain/catalog';
+import { BADGE_STATUS, CAMERA_ONLY_SLOTS, DISPLAY_STATUS, PHOTO_SLOTS, SHIFT_LABEL, type PhotoSlot } from '@/lib/domain/catalog';
 import { minutesToHHMM, riyadhDate, riyadhMinuteOfDay, riyadhWeekday } from '@/lib/domain/time';
 import {
   computeCompliance,
@@ -8,6 +8,8 @@ import {
   roundBadgeState,
   roundDisplayStatus,
   SHIFT_PLAN,
+  shiftWindowState,
+  windowText,
   worstBadge,
   type ComplianceLevel,
   type RoundStatus,
@@ -19,7 +21,7 @@ import type { SessionUser } from './auth';
 import { loadActiveItemsByGroup, loadSettings } from './catalog';
 import { ApiError } from './http';
 import { namesById } from './people';
-import { normalizePhoto, removePhotos, signPhotoUrls, storePhoto } from './photos';
+import { assertFreshCapture, normalizePhoto, removePhotos, signPhotoUrls, storePhoto } from './photos';
 import { syncRounds } from './rounds-maintenance';
 import { createServiceClient, createUserClient } from './supabase';
 
@@ -87,11 +89,29 @@ interface RoundRow {
 
 function planInfo(shift: Shift) {
   const p = SHIFT_PLAN[shift];
-  return { start: minutesToHHMM(p.start), fullUntil: minutesToHHMM(p.fullUntil), nonFrom: minutesToHHMM(p.nonFrom), deadline: minutesToHHMM(p.deadline) };
+  return {
+    start: minutesToHHMM(p.start),
+    fullUntil: minutesToHHMM(Math.min(p.fullUntil, p.deadline)),
+    nonFrom: minutesToHHMM(p.nonFrom),
+    deadline: minutesToHHMM(p.deadline),
+    // هل للجولة فترة «متأخر/غير ملتزم» داخل نافذتها (المسائية ملتزمة طوال نافذتها)
+    hasLateBand: p.fullUntil < p.deadline,
+  };
 }
 
 export function deadlineMessage(shift: Shift) {
   return `انتهى الوقت المسموح لإنهاء الجولة (${minutesToHHMM(SHIFT_PLAN[shift].deadline)})`;
+}
+
+export function notOpenMessage(shift: Shift) {
+  return `لم يبدأ وقت ${SHIFT_LABEL[shift]} بعد. وقتها من ${windowText(shift)} بتوقيت الرياض.`;
+}
+
+/** بدء الجولة والعمل عليها (حفظ المسودة والصور والإرسال) داخل نافذتها فقط — بتوقيت الرياض */
+function assertWindowOpen(round: RoundRow, now: Date) {
+  const state = shiftWindowState(round.shift, riyadhMinuteOfDay(now));
+  if (state === 'before') throw new ApiError(409, 'round_not_open', notOpenMessage(round.shift));
+  if (state === 'closed') throw new ApiError(409, 'round_missed', deadlineMessage(round.shift));
 }
 
 /** الجولة المعروضة للمراقب الآن: درجة شريط الالتزام */
@@ -191,6 +211,7 @@ export async function loadMonitorToday(user: SessionUser, now: Date, requestedRe
       tone: DISPLAY_STATUS[display].tone,
       bar: liveComplianceBar(r, today, minute),
       plan: planInfo(r.shift),
+      window: shiftWindowState(r.shift, minute),
       complianceLevel: r.compliance_level,
       complianceScore: r.compliance_score === null ? null : Number(r.compliance_score),
       submittedAt: r.submitted_at,
@@ -223,7 +244,7 @@ export async function loadMonitorToday(user: SessionUser, now: Date, requestedRe
     badge: { state: badge, ...BADGE_STATUS[badge] },
     defaultShift: defaultShift(minute, list),
     deep: {
-      required: riyadhWeekday(now) === settings.deep_clean_weekday,
+      required: items.deep.length > 0 && riyadhWeekday(now) === settings.deep_clean_weekday,
       weekday: settings.deep_clean_weekday,
     },
     items: {
@@ -270,6 +291,7 @@ async function activeItemIds() {
 export async function saveDraft(user: SessionUser, roundId: string, draft: RoundDraft, now: Date) {
   const { round } = await openRoundForMonitor(user, roundId, now);
   assertPending(round);
+  assertWindowOpen(round, now);
   const { allowed } = await activeItemIds();
   const answers = Object.fromEntries(Object.entries(draft.answers).filter(([id]) => allowed.has(id)));
   const { error } = await createServiceClient()
@@ -286,15 +308,17 @@ export async function saveDraft(user: SessionUser, roundId: string, draft: Round
 function lockedFromDb(message: string | undefined, shift: Shift): ApiError | null {
   if (!message) return null;
   if (message.includes('round_locked') || message === 'round_missed') return new ApiError(409, 'round_locked', deadlineMessage(shift));
+  if (message === 'round_not_open') return new ApiError(409, 'round_not_open', notOpenMessage(shift));
   if (message === 'round_already_submitted') return new ApiError(409, 'round_already_submitted', 'تم إرسال هذه الجولة مسبقًا ولا يمكن تعديلها.');
   return null;
 }
 
-export async function uploadRoundPhoto(user: SessionUser, roundId: string, slot: PhotoSlot, file: Buffer, now: Date) {
+export async function uploadRoundPhoto(user: SessionUser, roundId: string, slot: PhotoSlot, file: Buffer, now: Date, source: string | null = null) {
   const { round } = await openRoundForMonitor(user, roundId, now);
   assertPending(round);
-  const deadlineCheck = computeCompliance(round.shift, riyadhMinuteOfDay(now));
-  if (!deadlineCheck.ok) throw new ApiError(409, 'round_missed', deadlineMessage(round.shift));
+  assertWindowOpen(round, now);
+  // صورة العمالة: التقاط مباشر بالكاميرا فقط (لا صور محفوظة على الجهاز)
+  if (CAMERA_ONLY_SLOTS.includes(slot)) await assertFreshCapture(file, source, now);
   const photo = await normalizePhoto(file);
   const key = `rounds/${round.id}/${slot}-${randomUUID()}.jpg`;
   await storePhoto(key, photo.buffer, photo.mime);
@@ -319,6 +343,7 @@ export async function uploadRoundPhoto(user: SessionUser, roundId: string, slot:
 export async function deleteRoundPhoto(user: SessionUser, roundId: string, slot: PhotoSlot, now: Date) {
   const { round } = await openRoundForMonitor(user, roundId, now);
   assertPending(round);
+  assertWindowOpen(round, now);
   const svc = createServiceClient();
   const { data: existing } = await svc.from('round_photos').select('id, storage_key').eq('round_id', round.id).eq('slot', slot).maybeSingle();
   if (!existing) return { slot, deleted: false };
@@ -354,7 +379,10 @@ export async function submitRound(user: SessionUser, roundId: string, input: Rou
 
   const minute = riyadhMinuteOfDay(now);
   const compliance = computeCompliance(round.shift, minute);
-  if (!compliance.ok) throw new ApiError(409, 'deadline_passed', deadlineMessage(round.shift));
+  if (!compliance.ok) {
+    if (compliance.reason === 'not_open') throw new ApiError(409, 'round_not_open', notOpenMessage(round.shift));
+    throw new ApiError(409, 'deadline_passed', deadlineMessage(round.shift));
+  }
 
   const [{ items, allowed }, settings, { data: photoRows }] = await Promise.all([
     activeItemIds(),
@@ -364,7 +392,7 @@ export async function submitRound(user: SessionUser, roundId: string, input: Rou
   const unknown = Object.keys(input.answers).filter((id) => !allowed.has(id));
   if (unknown.length) throw new ApiError(422, 'unknown_items', 'تغيّرت بنود الجولة. حدّث الصفحة ثم أعد الإرسال.');
 
-  const deepRequired = riyadhWeekday(now) === settings.deep_clean_weekday;
+  const deepRequired = items.deep.length > 0 && riyadhWeekday(now) === settings.deep_clean_weekday;
   const answers = input.answers as Record<string, Answer>;
   const issues = roundSubmissionIssues({
     contractorItems: items.contractor,
@@ -413,6 +441,7 @@ export async function submitRound(user: SessionUser, roundId: string, input: Rou
     if (error.message === 'round_already_submitted') throw new ApiError(409, 'round_already_submitted', 'تم إرسال هذه الجولة مسبقًا ولا يمكن تعديلها.');
     if (error.message === 'round_missed' || error.message.includes('round_locked')) throw new ApiError(409, 'round_missed', deadlineMessage(round.shift));
     if (error.message === 'round_photos_missing') throw new ApiError(422, 'incomplete', 'أكمل الصور الإلزامية قبل الإرسال');
+    if (error.message === 'round_not_open') throw new ApiError(409, 'round_not_open', notOpenMessage(round.shift));
     throw new Error(error.message);
   }
   return {

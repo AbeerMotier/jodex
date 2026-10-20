@@ -72,7 +72,8 @@ test('منع حفظ الأوزان عند مجموع ≠ 100 (الخادم وا�
   try {
     const page = ui.page;
     await page.goto('/admin/settings');
-    const input = page.getByLabel(`وزن ${first.title}`, { exact: true });
+    // بنود المشرف مطابقة لبنود المقاول بالعناوين، فيُحدَّد الحقل داخل مجموعة المقاول
+    const input = page.getByTestId('group-contractor').getByLabel(`وزن ${first.title}`, { exact: true });
     await input.fill(String(Number(first.weight) + 7));
     await expect(page.getByTestId('sum-contractor')).not.toHaveText(/^100/);
     await expect(page.getByText('مجموع أوزان بنود جولة المقاول الفعالة يجب أن يساوي 100%.')).toBeVisible();

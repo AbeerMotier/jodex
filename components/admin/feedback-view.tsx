@@ -12,7 +12,7 @@ import { FilterGroup, Segmented, SelectField, Toolbar } from './toolbar';
 
 interface Row {
   id: string;
-  restroom: { name: string; floor: string; building: string };
+  restroom: { code: string; name: string; floor: string; building: string };
   submittedAt: string;
   rating: FeedbackRating;
   reasons: string[];
@@ -20,7 +20,7 @@ interface Row {
 
 const PERIODS: Period[] = ['today', 'week', 'month'];
 const RATINGS: FeedbackRating[] = ['excellent', 'good', 'bad'];
-const GRID = 'grid grid-cols-[minmax(190px,1.4fr)_150px_120px_minmax(160px,1.3fr)] gap-3';
+const GRID = 'grid grid-cols-[minmax(190px,1.4fr)_minmax(150px,1fr)_150px_120px_minmax(160px,1.3fr)] gap-3';
 
 export function FeedbackView() {
   const f = useUrlFilters();
@@ -55,9 +55,10 @@ export function FeedbackView() {
       <ActiveFilters items={active} onClear={() => f.set({ building: null, floor: null, restroom: null, rating: null })} />
       <section className="min-w-0 animate-fade-up rounded-[20px] border border-line bg-white py-2" data-testid="feedback-table">
         <div className="overflow-x-auto">
-          <div className="min-w-[660px]">
+          <div className="min-w-[830px]">
             <div className={`${GRID} px-5 py-3 text-[12px] font-semibold text-muted`}>
               <span>دورة المياه</span>
+              <span>ترميز دورة المياه</span>
               <span>تاريخ ووقت الإرسال</span>
               <span>التقييم</span>
               <span>سبب عدم الرضا</span>
@@ -85,6 +86,9 @@ export function FeedbackView() {
                     <span className="text-[12px] text-muted">
                       {b.restroom.floor} · {b.restroom.building}
                     </span>
+                  </span>
+                  <span dir="ltr" className="tabular text-right text-[12px]" data-testid="feedback-code">
+                    {b.restroom.code}
                   </span>
                   <span>
                     <span className="block">{instantDayLabel(b.submittedAt)}</span>

@@ -1,5 +1,5 @@
 import 'server-only';
-import { FEEDBACK_RATING_LABEL, PERIOD_LABEL, SEVERITY_LABEL, SOURCE_LABEL, type Source } from '@/lib/domain/catalog';
+import { FEEDBACK_RATING_LABEL, PERIOD_LABEL, SATISFACTION_FORMULA, SEVERITY_LABEL, SOURCE_LABEL, type Source } from '@/lib/domain/catalog';
 import { dayLabel, fmtPct, instantDate, instantDayLabel, timeHM } from '@/lib/domain/format';
 import type { SessionUser } from '../auth';
 import { audit } from '../audit';
@@ -57,9 +57,10 @@ function entryCells(r: EntryView): Cell[] {
     r.restroom.building,
     r.restroom.floor,
     r.restroom.name,
+    { html: `<span dir="ltr">${esc(r.restroom.code)}</span>` },
     r.evalType,
     num(pctText(r.result)),
-    chip(r.status.label + (r.urgent ? ' · معالجة فورية' : ''), r.status.tone),
+    chip(r.status.label + (r.urgent ? ' · معالجة فورية' : '') + (r.mismatch ? ' · جولة المراقب غير مطابقة' : ''), r.status.tone),
   ];
 }
 
@@ -73,7 +74,7 @@ const ENTRY_COLUMNS: SheetSpec['columns'] = [
   { header: 'المبنى', width: 16 },
   { header: 'الدور', width: 14 },
   { header: 'دورة المياه', width: 18 },
-  { header: 'الترميز', width: 26 },
+  { header: 'ترميز دورة المياه', width: 26 },
   { header: 'نوع التقييم', width: 14 },
   { header: 'النتيجة', width: 10, numFmt: '0.0%' },
   { header: 'الحالة', width: 22 },
@@ -93,7 +94,7 @@ function entryRow(r: EntryView): (string | number | null)[] {
     r.restroom.code,
     r.evalType,
     pctNum(r.result),
-    r.status.label + (r.urgent ? ' · معالجة فورية' : ''),
+    r.status.label + (r.urgent ? ' · معالجة فورية' : '') + (r.mismatch ? ' · جولة المراقب غير مطابقة' : ''),
   ];
 }
 
@@ -116,7 +117,10 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
       }
       if (d.quality.contractor) summary.push(['متوسط نتيجة جولات مراقبي المقاول', `${pctText(d.quality.contractor.value)} · ${d.quality.contractor.sub}`]);
       if (d.quality.supervisor) summary.push(['متوسط التقييم العام للمشرفين الميدانيين', `${pctText(d.quality.supervisor.value)} · ${d.quality.supervisor.sub}`]);
-      if (d.quality.beneficiary) summary.push(['رضا المستفيدين', `${pctText(d.quality.beneficiary.value)} · ${d.quality.beneficiary.sub}`]);
+      if (d.quality.beneficiary) {
+        summary.push(['مؤشر رضا المستفيدين', `${pctText(d.quality.beneficiary.value)} · ${d.quality.beneficiary.sub}`]);
+        summary.push(['طريقة احتساب مؤشر الرضا', SATISFACTION_FORMULA]);
+      }
       if (d.quality.compliance)
         summary.push(['نسبة التزام الجولات', `كلية ${pctText(d.quality.compliance.overall)} · صباحية ${pctText(d.quality.compliance.am)} · مسائية ${pctText(d.quality.compliance.pm)}`]);
 
@@ -133,7 +137,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
         table(['المؤشر', 'القيمة'], summary),
         `<h2>مقارنة الأداء العام</h2>`,
         table(['دورة المياه', 'الموقع', ...seriesHead], compRows.map((r) => r.map((c, i) => (i < 2 ? String(c) : num(pctText(c as number | null)))))),
-        recentEntries.length ? `<h2>${d.recent.title}</h2>` + table(['التاريخ والوقت', 'النوع', 'الموظف', 'المبنى', 'الدور', 'دورة المياه', 'نوع التقييم', 'النتيجة', 'الحالة'], recentEntries.map(entryCells)) : '',
+        recentEntries.length ? `<h2>${d.recent.title}</h2>` + table(['التاريخ والوقت', 'النوع', 'الموظف', 'المبنى', 'الدور', 'دورة المياه', 'ترميز دورة المياه', 'نوع التقييم', 'النتيجة', 'الحالة'], recentEntries.map(entryCells)) : '',
         perf.length
           ? `<h2>مؤشرات أداء المقاولين</h2>` +
             table(['المراقب', 'الموقع', 'مستوى الجودة', 'الالتزام', 'الجولات'], perf.map((p) => [p.name, `${p.restroom.name} · ${p.restroom.floor} · ${p.restroom.building}`, num(pctText(p.q)), num(pctText(p.cp)), num(pctText(p.a))]))
@@ -150,7 +154,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
             name: 'مقارنة الأداء',
             columns: [
               { header: 'دورة المياه', width: 20 },
-              { header: 'الترميز', width: 26 },
+              { header: 'ترميز دورة المياه', width: 26 },
               { header: 'الموقع', width: 30 },
               ...seriesHead.map((h) => ({ header: h, width: 16, numFmt: '0.0%' })),
             ],
@@ -167,7 +171,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
             columns: [
               { header: 'المراقب', width: 20 },
               { header: 'الموقع', width: 36 },
-              { header: 'الترميز', width: 40 },
+              { header: 'ترميز دورة المياه', width: 40 },
               { header: 'مستوى الجودة', width: 14, numFmt: '0.0%' },
               { header: 'الالتزام', width: 12, numFmt: '0.0%' },
               { header: 'الجولات (متوسط النتيجة)', width: 20, numFmt: '0.0%' },
@@ -194,7 +198,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
         q,
         meta,
         subtitle: 'جولات مراقبي المقاول وتقييمات المشرفين الميدانيين',
-        pdfBody: table(['التاريخ والوقت', 'النوع', 'الموظف', 'المبنى', 'الدور', 'دورة المياه', 'نوع التقييم', 'النتيجة', 'الحالة'], data.rows.map(entryCells)),
+        pdfBody: table(['التاريخ والوقت', 'النوع', 'الموظف', 'المبنى', 'الدور', 'دورة المياه', 'ترميز دورة المياه', 'نوع التقييم', 'النتيجة', 'الحالة'], data.rows.map(entryCells)),
         sheets: [{ name: 'سجل الجولات', columns: ENTRY_COLUMNS, rows: data.rows.map(entryRow) }],
       };
     }
@@ -206,9 +210,10 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
         meta,
         subtitle: 'تقييمات المستفيدين عبر رموز QR',
         pdfBody: table(
-          ['دورة المياه', 'الموقع', 'تاريخ ووقت الإرسال', 'التقييم', 'سبب عدم الرضا'],
+          ['دورة المياه', 'ترميز دورة المياه', 'الموقع', 'تاريخ ووقت الإرسال', 'التقييم', 'سبب عدم الرضا'],
           data.rows.map((r) => [
             r.restroom.name,
+            { html: `<span dir="ltr">${esc(r.restroom.code)}</span>` },
             `${r.restroom.floor} · ${r.restroom.building}`,
             `${instantDayLabel(r.submittedAt)} · ${timeHM(r.submittedAt)}`,
             chip(FEEDBACK_RATING_LABEL[r.rating], r.rating === 'bad' ? 'error' : r.rating === 'good' ? 'warning' : 'success'),
@@ -220,7 +225,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
             name: 'تقييمات المستفيدين',
             columns: [
               { header: 'دورة المياه', width: 18 },
-              { header: 'الترميز', width: 26 },
+              { header: 'ترميز دورة المياه', width: 26 },
               { header: 'الدور', width: 14 },
               { header: 'المبنى', width: 16 },
               { header: 'التاريخ', width: 18 },
@@ -247,11 +252,12 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
         meta,
         subtitle: 'ملاحظات المشرفين الميدانيين (للاطلاع)',
         pdfBody: table(
-          ['الملاحظة', 'الأهمية', 'الموقع', 'المشرف الميداني', 'التاريخ والوقت', 'الصور'],
+          ['الملاحظة', 'الأهمية', 'الموقع', 'ترميز دورة المياه', 'المشرف الميداني', 'التاريخ والوقت', 'الصور'],
           data.rows.map((n) => [
             n.text,
             chip(SEVERITY_LABEL[n.severity], n.severity === 'high' ? 'error' : n.severity === 'mid' ? 'warning' : 'success'),
             `${n.restroom.name} · ${n.restroom.floor} · ${n.restroom.building}`,
+            { html: `<span dir="ltr">${esc(n.restroom.code)}</span>` },
             n.supervisor,
             `${instantDayLabel(n.createdAt)} · ${timeHM(n.createdAt)}`,
             n.photos.length ? `${n.photos.length} صور` : 'بدون صور مرفقة',
@@ -264,7 +270,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
               { header: 'الملاحظة', width: 44 },
               { header: 'الأهمية', width: 14 },
               { header: 'دورة المياه', width: 18 },
-              { header: 'الترميز', width: 26 },
+              { header: 'ترميز دورة المياه', width: 26 },
               { header: 'الدور', width: 14 },
               { header: 'المبنى', width: 16 },
               { header: 'المشرف الميداني', width: 18 },
@@ -314,7 +320,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
               { header: '#', width: 5 },
               { header: 'الموظف', width: 20 },
               { header: 'الموقع', width: 36 },
-              { header: 'الترميز', width: 40 },
+              { header: 'ترميز دورة المياه', width: 40 },
               { header: 'الالتزام', width: 12, numFmt: '0.0%' },
               { header: 'الجودة', width: 12, numFmt: '0.0%' },
               { header: 'الاعتماد', width: 12 },
@@ -327,7 +333,7 @@ async function buildReport(report: Report, sp: URLSearchParams, user: SessionUse
               { header: '#', width: 5 },
               { header: 'الموظف', width: 20 },
               { header: 'الموقع', width: 36 },
-              { header: 'الترميز', width: 40 },
+              { header: 'ترميز دورة المياه', width: 40 },
               { header: 'المكتملة', width: 10 },
               { header: 'المطلوبة', width: 10 },
               { header: 'نسبة الالتزام', width: 14, numFmt: '0.0%' },

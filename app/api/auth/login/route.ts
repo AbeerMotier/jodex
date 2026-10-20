@@ -28,7 +28,7 @@ function safeNext(next: string | undefined, role: Role): string {
   const home = ROLE_HOME[role];
   if (!next || !next.startsWith('/') || next.startsWith('//')) return home;
   // الدخول من رمز QR لدورة مياه (تتحقق الصفحة نفسها من الدور والنطاق)
-  if (/^\/go\/[A-Za-z0-9_-]{22,128}$/.test(next)) return next;
+  if (/^\/go\/(?:[A-Za-z0-9_-]{22,128}|[A-Z0-9-]{2,40})$/.test(next)) return next;
   return next === home || next.startsWith(`${home}/`) || next.startsWith(`${home}?`) ? next : home;
 }
 

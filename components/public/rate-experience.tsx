@@ -22,10 +22,13 @@ export function RateExperience({
   token,
   restroom,
   serverNow,
+  blockedMessage = null,
 }: {
   token: string;
-  restroom: { name: string; floor: string; building: string };
+  restroom: { code?: string; name: string; floor: string; building: string };
   serverNow: string;
+  /** سبق التقييم خلال 24 ساعة: تُعرض الرسالة بدل النموذج */
+  blockedMessage?: string | null;
 }) {
   const now = useServerClock(serverNow, 30_000);
   const [rating, setRating] = useState<FeedbackRating | null>(null);
@@ -34,6 +37,7 @@ export function RateExperience({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState<FeedbackRating | null>(null);
+  const [blocked, setBlocked] = useState<string | null>(blockedMessage);
 
   const isBad = rating === 'bad';
   const otherSelected = reasons.includes('other');
@@ -65,7 +69,8 @@ export function RateExperience({
       setSent(rating);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
-      setError(e instanceof ApiClientError ? e.message : 'تعذّر إرسال التقييم. حاول مرة أخرى.');
+      if (e instanceof ApiClientError && e.code === 'too_soon') setBlocked(e.message);
+      else setError(e instanceof ApiClientError ? e.message : 'تعذّر إرسال التقييم. حاول مرة أخرى.');
     } finally {
       setSending(false);
     }
@@ -84,11 +89,24 @@ export function RateExperience({
             <div className="mt-1 text-[14px] text-white">
               {restroom.floor} · {restroom.building}
             </div>
+            {restroom.code && (
+              <div dir="ltr" className="tabular mt-1 text-right text-[12.5px] text-white/90" data-testid="rate-code">
+                {restroom.code}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {sent ? (
+      {blocked && !sent ? (
+        <section className="rounded-[22px] border border-line bg-white px-5 py-8 text-center shadow-[0_10px_30px_rgba(47,79,68,.05)]" data-testid="rate-blocked" role="status">
+          <div className="mx-auto mb-3 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-ok-bg text-[24px] text-ok-ink" aria-hidden>
+            ✓
+          </div>
+          <div className="text-[19px] font-bold">شكرًا، تقييمك مسجّل</div>
+          <div className="mx-auto mt-2 max-w-[340px] text-[14.5px] leading-[1.8] text-ink-2">{blocked}</div>
+        </section>
+      ) : sent ? (
         <section
           data-testid="thanks"
           className="relative animate-[pop_.4s_cubic-bezier(.2,.8,.3,1)_both] overflow-hidden rounded-[28px] border border-[rgba(85,149,122,.22)] bg-[rgba(85,149,122,.12)] px-[22px] pt-14 pb-12 text-center text-ink"

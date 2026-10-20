@@ -1,6 +1,6 @@
 import 'server-only';
 import { generatePassword, internalEmail } from '@/lib/accounts';
-import { ROLE_LABEL, type MonitorKind, type Role } from '@/lib/domain/catalog';
+import { ADMIN_SCOPE_LABEL, ROLE_LABEL, type AdminScope, type MonitorKind, type Role } from '@/lib/domain/catalog';
 import type { UserCreateInput, UserUpdateInput } from '@/lib/domain/validation';
 import type { SessionUser } from '../auth';
 import { audit } from '../audit';
@@ -19,6 +19,7 @@ interface UserRow {
   monitor_kind: MonitorKind | null;
   substitute_for_id: string | null;
   is_active: boolean;
+  admin_scope: AdminScope;
   created_at: string;
 }
 
@@ -41,15 +42,16 @@ function dbError(message: string): ApiError {
 /** كل المستخدمين مع ما يخص كل دور (دورات المراقب، مواقع المشرف، من ينوب عنه النائب) */
 export async function listUsers() {
   const svc = createServiceClient();
-  const [{ data: users, error }, { data: rooms }, { data: assigns }, { data: buildings }] = await Promise.all([
+  const [{ data: users, error }, { data: rooms }, { data: assigns }, { data: buildings }, { data: contractorAssigns }] = await Promise.all([
     svc
       .from('users')
-      .select('id, username, full_name, role, monitor_kind, substitute_for_id, is_active, created_at')
+      .select('id, username, full_name, role, monitor_kind, substitute_for_id, is_active, admin_scope, created_at')
       .order('role')
       .order('full_name'),
     svc.from('restrooms').select('id, code, name, floor_label, building_id, monitor_id, is_active').order('code'),
     svc.from('supervisor_assignments').select('supervisor_id, restroom_id'),
     svc.from('buildings').select('id, name').order('name'),
+    svc.from('contractor_assignments').select('contractor_id, restroom_id'),
   ]);
   if (error) throw new Error(error.message);
   const list = (users ?? []) as UserRow[];
@@ -58,6 +60,7 @@ export async function listUsers() {
   for (const r of rooms ?? []) if (r.monitor_id) roomsOf.set(r.monitor_id, [...(roomsOf.get(r.monitor_id) ?? []), r.id]);
   const sitesOf = new Map<string, string[]>();
   for (const a of assigns ?? []) sitesOf.set(a.supervisor_id, [...(sitesOf.get(a.supervisor_id) ?? []), a.restroom_id]);
+  for (const a of contractorAssigns ?? []) sitesOf.set(a.contractor_id, [...(sitesOf.get(a.contractor_id) ?? []), a.restroom_id]);
 
   return {
     users: list.map((u) => ({
@@ -70,8 +73,15 @@ export async function listUsers() {
       substituteForId: u.substitute_for_id,
       substituteForName: u.substitute_for_id ? nameOf.get(u.substitute_for_id) ?? null : null,
       isActive: u.is_active,
+      adminScope: u.role === 'admin' ? u.admin_scope : null,
+      adminScopeLabel: u.role === 'admin' ? ADMIN_SCOPE_LABEL[u.admin_scope] : null,
       createdAt: u.created_at,
-      restroomIds: u.role === 'contractor_monitor' && u.monitor_kind === 'primary' ? roomsOf.get(u.id) ?? [] : u.role === 'supervisor' ? sitesOf.get(u.id) ?? [] : [],
+      restroomIds:
+        u.role === 'contractor_monitor' && u.monitor_kind === 'primary'
+          ? roomsOf.get(u.id) ?? []
+          : u.role === 'supervisor' || u.role === 'contractor'
+            ? sitesOf.get(u.id) ?? []
+            : [],
     })),
     buildings: (buildings ?? []).map((b) => ({ id: b.id as string, name: b.name as string })),
     restrooms: (rooms ?? []).map((r) => ({
@@ -90,7 +100,7 @@ async function loadUser(id: string): Promise<UserRow> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new ApiError(404, 'user_not_found', 'المستخدم غير موجود.');
   const { data } = await createServiceClient()
     .from('users')
-    .select('id, username, full_name, role, monitor_kind, substitute_for_id, is_active, created_at')
+    .select('id, username, full_name, role, monitor_kind, substitute_for_id, is_active, admin_scope, created_at')
     .eq('id', id)
     .maybeSingle();
   if (!data) throw new ApiError(404, 'user_not_found', 'المستخدم غير موجود.');
@@ -132,12 +142,18 @@ export async function createUser(actor: SessionUser, input: UserCreateInput) {
     role: input.role,
     monitor_kind: kind,
     substitute_for_id: substituteFor,
+    admin_scope: input.role === 'admin' ? input.adminScope : 'full',
   });
   if (error) {
     await svc.auth.admin.deleteUser(created.user.id);
     throw dbError(error.message);
   }
-  await audit(actor.id, 'users.create', 'users', created.user.id, { username: input.username, role: input.role, monitor_kind: kind });
+  await audit(actor.id, 'users.create', 'users', created.user.id, {
+    username: input.username,
+    role: input.role,
+    monitor_kind: kind,
+    admin_scope: input.role === 'admin' ? input.adminScope : null,
+  });
   return { id: created.user.id, username: input.username, password };
 }
 
@@ -145,8 +161,8 @@ export async function createUser(actor: SessionUser, input: UserCreateInput) {
 export async function updateUser(actor: SessionUser, id: string, input: UserUpdateInput) {
   const user = await loadUser(id);
   const svc = createServiceClient();
-  if (user.id === actor.id && (input.isActive === false || (input.role && input.role !== 'admin'))) {
-    throw new ApiError(409, 'self_lockout', 'لا يمكنك تعطيل حسابك أو تغيير دورك بنفسك.');
+  if (user.id === actor.id && (input.isActive === false || (input.role && input.role !== 'admin') || input.adminScope === 'limited')) {
+    throw new ApiError(409, 'self_lockout', 'لا يمكنك تعطيل حسابك أو تغيير دورك أو صلاحياتك بنفسك.');
   }
 
   const role = input.role ?? user.role;
@@ -174,6 +190,7 @@ export async function updateUser(actor: SessionUser, id: string, input: UserUpda
     monitor_kind: kind,
     substitute_for_id: substituteFor,
     is_active: input.isActive ?? user.is_active,
+    admin_scope: role === 'admin' ? input.adminScope ?? user.admin_scope : ('full' as AdminScope),
   };
   const { error } = await svc.from('users').update(patch).eq('id', user.id);
   if (error) throw dbError(error.message);
@@ -181,6 +198,9 @@ export async function updateUser(actor: SessionUser, id: string, input: UserUpda
   // المشرف الذي تغيّر دوره لا تبقى له مواقع مسندة
   if (user.role === 'supervisor' && role !== 'supervisor') {
     await svc.from('supervisor_assignments').delete().eq('supervisor_id', user.id);
+  }
+  if (user.role === 'contractor' && role !== 'contractor') {
+    await svc.from('contractor_assignments').delete().eq('contractor_id', user.id);
   }
   const authPatch: { app_metadata?: Record<string, string>; ban_duration?: string } = {};
   if (role !== user.role || username !== user.username) authPatch.app_metadata = { jodex_role: role, jodex_username: username };
@@ -192,7 +212,15 @@ export async function updateUser(actor: SessionUser, id: string, input: UserUpda
   }
   await audit(actor.id, 'users.update', 'users', user.id, {
     username: user.username,
-    before: { username: user.username, full_name: user.full_name, role: user.role, monitor_kind: user.monitor_kind, substitute_for_id: user.substitute_for_id, is_active: user.is_active },
+    before: {
+      username: user.username,
+      full_name: user.full_name,
+      role: user.role,
+      monitor_kind: user.monitor_kind,
+      substitute_for_id: user.substitute_for_id,
+      is_active: user.is_active,
+      admin_scope: user.admin_scope,
+    },
     after: patch,
   });
   return { ok: true };
@@ -216,7 +244,7 @@ export async function resetUserPassword(actor: SessionUser, id: string, chosen?:
 /**
  * ربط دورات المياه بالمستخدم حسب دوره:
  * المراقب الأساسي = دورات المياه المسؤول عنها (تُنزع من مسؤولها السابق)،
- * المشرف الميداني = المواقع التي يقيّمها.
+ * المشرف الميداني = المواقع التي يقيّمها، المقاول = دورات المياه المسندة إليه (عرض فقط).
  */
 export async function setUserRestrooms(actor: SessionUser, id: string, restroomIds: string[]) {
   const user = await loadUser(id);
@@ -255,5 +283,16 @@ export async function setUserRestrooms(actor: SessionUser, id: string, restroomI
     return { count: ids.length };
   }
 
-  throw new ApiError(422, 'not_assignable', 'الربط بدورات المياه للمراقب الأساسي والمشرف الميداني فقط.');
+  if (user.role === 'contractor') {
+    const { error: delErr } = await svc.from('contractor_assignments').delete().eq('contractor_id', user.id);
+    if (delErr) throw new Error(delErr.message);
+    if (ids.length) {
+      const { error } = await svc.from('contractor_assignments').insert(ids.map((rid) => ({ contractor_id: user.id, restroom_id: rid })));
+      if (error) throw new Error(error.message);
+    }
+    await audit(actor.id, 'users.assign_contractor_restrooms', 'users', user.id, { username: user.username, restroom_ids: ids });
+    return { count: ids.length };
+  }
+
+  throw new ApiError(422, 'not_assignable', 'الربط بدورات المياه للمراقب الأساسي والمشرف الميداني والمقاول فقط.');
 }

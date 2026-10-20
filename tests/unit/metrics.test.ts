@@ -6,6 +6,7 @@ import {
   contractorAverage,
   feedbackStats,
   monitorPerformance,
+  satisfactionIndex,
   rankByTotal,
   recentEntries,
   roundCounts,
@@ -87,13 +88,20 @@ describe('عدادات الجولات', () => {
 });
 
 describe('رضا المستفيدين والمشرفين', () => {
-  it('الرضا = (ممتاز + جيد) ÷ الكل', () => {
+  it('مؤشر الرضا بالأوزان: (ممتاز×60 + جيد×30 + سيئ×10) ÷ (العدد×60) × 100', () => {
     const s = feedbackStats([
       { restroom_id: 'A', rating: 5, total: 6 },
       { restroom_id: 'A', rating: 4, total: 2 },
       { restroom_id: 'B', rating: 1, total: 2 },
     ]);
-    expect(s).toEqual({ total: 10, excellent: 6, good: 2, bad: 2, satisfaction: 80 });
+    // (6×60 + 2×30 + 2×10) ÷ (10×60) = 440 ÷ 600 = 73.33%
+    expect(s).toEqual({ total: 10, excellent: 6, good: 2, bad: 2, satisfaction: 73.33 });
+  });
+  it('مؤشر الرضا: كل التقييمات ممتاز = 100، جيد = 50، سيئ = 16.67، ولا تقييمات = —', () => {
+    expect(satisfactionIndex(3, 0, 0)).toBe(100);
+    expect(satisfactionIndex(0, 4, 0)).toBe(50);
+    expect(satisfactionIndex(0, 0, 5)).toBe(16.67);
+    expect(satisfactionIndex(0, 0, 0)).toBeNull();
   });
   it('متوسط المشرف', () => {
     const ev: MetricEvaluation[] = [
@@ -136,6 +144,20 @@ describe('أداء المراقبين والمكافآت', () => {
     expect(m3).toMatchObject({ cp: 92, a: 90, s: 80, q: 85, completed: 1, required: 2, classification: 'excellent' });
     const m4 = perf.find((p) => p.monitorId === 'm4')!;
     expect(m4).toMatchObject({ cp: null, q: null, classification: null });
+  });
+  it('إجابة المشرف «جولة المراقب غير مطابقة للواقع» لا تدخل في أداء المتميزين ولا تخفضه', () => {
+    const withMismatch: MetricEvaluation[] = [
+      ...evals,
+      { id: 'e4', restroom_id: 'A', supervisor_id: 's', submitted_at: '2026-10-15T09:00:00Z', score: 20, matches_round: 'no' },
+      { id: 'e5', restroom_id: 'C', supervisor_id: 's', submitted_at: '2026-10-15T09:00:00Z', score: 10, matches_round: 'no' },
+    ];
+    const p = monitorPerformance(monitors, rounds, withMismatch);
+    expect(p.find((x) => x.monitorId === 'm1')).toMatchObject({ s: 95, q: 95, classification: 'excellent' });
+    expect(p.find((x) => x.monitorId === 'm3')).toMatchObject({ s: 80, q: 85, classification: 'excellent' });
+    expect(bonusCandidates(p).map((x) => x.monitorId)).toEqual(bonusCandidates(perf).map((x) => x.monitorId));
+    // إجابة «نعم» تبقى محتسبة
+    const withMatch = monitorPerformance(monitors, rounds, [...evals, { id: 'e6', restroom_id: 'C', supervisor_id: 's', submitted_at: '2026-10-15T09:00:00Z', score: 60, matches_round: 'yes' }]);
+    expect(withMatch.find((x) => x.monitorId === 'm3')!.s).toBe(70);
   });
   it('وضع «تقييم المقاول» يستخدم a فقط', () => {
     const m3 = monitorPerformance(monitors, rounds, evals, 'contractor').find((p) => p.monitorId === 'm3')!;

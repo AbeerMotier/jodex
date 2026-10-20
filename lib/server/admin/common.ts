@@ -113,7 +113,7 @@ export async function loadPeriodEvaluations(client: SupabaseClient, range: DateR
   const rows = await fetchAll<Record<string, unknown>>((from, to) => {
     let q = client
       .from('supervisor_evaluations')
-      .select('id, restroom_id, supervisor_id, submitted_at, score, needs_urgent')
+      .select('id, restroom_id, supervisor_id, submitted_at, score, needs_urgent, matches_round')
       .not('submitted_at', 'is', null)
       .gte('submitted_at', range.fromInstant.toISOString())
       .lt('submitted_at', range.toInstantExclusive.toISOString());
@@ -127,6 +127,7 @@ export async function loadPeriodEvaluations(client: SupabaseClient, range: DateR
     submitted_at: String(e.submitted_at),
     score: e.score === null ? null : Number(e.score),
     needs_urgent: (e.needs_urgent as string | null) ?? null,
+    matches_round: (e.matches_round as 'yes' | 'no' | null) ?? null,
   }));
 }
 

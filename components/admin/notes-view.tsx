@@ -19,7 +19,7 @@ interface Row {
   severity: NoteSeverity;
   createdAt: string;
   supervisor: string;
-  restroom: { name: string; floor: string; building: string };
+  restroom: { code: string; name: string; floor: string; building: string };
   photos: string[];
 }
 
@@ -98,8 +98,16 @@ export function NotesView() {
                     {SEVERITY_LABEL[n.severity]}
                   </Chip>
                 </div>
-                <div className="text-[12.5px] text-muted">
-                  {n.restroom.name} · {n.restroom.floor} · {n.restroom.building}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+                  <span>
+                    <span className="text-ink-2">دورة المياه:</span> {n.restroom.name} · {n.restroom.floor} · {n.restroom.building}
+                  </span>
+                  <span>
+                    <span className="text-ink-2">ترميز دورة المياه:</span>{' '}
+                    <span dir="ltr" className="tabular font-semibold text-ink" data-testid="note-code">
+                      {n.restroom.code}
+                    </span>
+                  </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted">
                   <RoleChip role="supervisor" />

@@ -7,12 +7,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-type Role = 'admin' | 'supervisor' | 'contractor_monitor';
-const ROLE_HOME: Record<Role, string> = { admin: '/admin', supervisor: '/supervisor', contractor_monitor: '/monitor' };
+type Role = 'admin' | 'supervisor' | 'contractor_monitor' | 'contractor';
+const ROLE_HOME: Record<Role, string> = { admin: '/admin', supervisor: '/supervisor', contractor_monitor: '/monitor', contractor: '/contractor' };
 const PROTECTED: { prefix: string; role: Role }[] = [
   { prefix: '/admin', role: 'admin' },
   { prefix: '/supervisor', role: 'supervisor' },
   { prefix: '/monitor', role: 'contractor_monitor' },
+  { prefix: '/contractor', role: 'contractor' },
 ];
 const CSRF_COOKIE = 'jodex_csrf';
 
@@ -131,7 +132,7 @@ export async function proxy(request: NextRequest) {
     if (res !== response) for (const c of response.cookies.getAll()) res.cookies.set(c);
     res.headers.set('Content-Security-Policy', csp);
     // معرّف جهاز عشوائي لصفحة تقييم المستفيد (لمنع الإساءة دون أي بيانات شخصية)
-    if (pathname.startsWith('/r/') && !request.cookies.get(DEVICE_COOKIE)) {
+    if ((pathname.startsWith('/r/') || pathname === '/scan') && !request.cookies.get(DEVICE_COOKIE)) {
       res.cookies.set(DEVICE_COOKIE, randomToken(18), {
         httpOnly: true,
         sameSite: 'lax',

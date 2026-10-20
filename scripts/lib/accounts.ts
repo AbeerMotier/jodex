@@ -23,8 +23,10 @@ export async function findAuthUserByUsername(svc: SupabaseClient, username: stri
 export interface ProfileFields {
   username: string;
   full_name: string;
-  role: 'admin' | 'supervisor' | 'contractor_monitor';
+  role: 'admin' | 'supervisor' | 'contractor_monitor' | 'contractor';
   monitor_kind: 'primary' | 'substitute' | null;
+  /** للأدمن: full (افتراضي) أو limited */
+  admin_scope?: 'full' | 'limited';
   /** للمراقب الأساسي: دورات المياه المسؤول عنها (تُسند إليه وتُنزع من مسؤولها السابق) */
   restroom_ids?: string[];
   substitute_for_id: string | null;
@@ -60,6 +62,7 @@ export async function upsertAccount(
         role: fields.role,
         monitor_kind: fields.monitor_kind,
         substitute_for_id: fields.substitute_for_id,
+        admin_scope: fields.admin_scope ?? 'full',
       })
       .eq('id', existing.id);
     if (error) throw error;
@@ -105,6 +108,7 @@ export async function upsertAccount(
     role: fields.role,
     monitor_kind: fields.monitor_kind,
     substitute_for_id: fields.substitute_for_id,
+    admin_scope: fields.admin_scope ?? 'full',
   });
   if (insErr) {
     if (!orphan) await svc.auth.admin.deleteUser(authUserId);

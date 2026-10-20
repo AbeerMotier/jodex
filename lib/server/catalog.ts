@@ -67,11 +67,12 @@ export function groupByCategory(items: ChecklistItem[]): ChecklistItem[] {
     .map((x) => x.item);
 }
 
+/** البنود الفعالة لكل مجموعة. «التنظيف العميق» أُلغي بطلب الجهة فلا يُعرض ولا يُطلب في الجولات الجديدة. */
 export async function loadActiveItemsByGroup(): Promise<Record<ItemGroup, ChecklistItem[]>> {
   const items = await loadItems({ activeOnly: true });
   return {
     contractor: items.filter((i) => i.group === 'contractor'),
-    deep: items.filter((i) => i.group === 'deep'),
+    deep: [],
     supervisor: items.filter((i) => i.group === 'supervisor'),
   };
 }

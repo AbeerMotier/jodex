@@ -4,7 +4,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { z } from 'zod';
 import { fieldErrors } from '@/lib/domain/validation';
 import type { Role } from '@/lib/domain/catalog';
-import { getSessionUser, type SessionUser } from './auth';
+import { getSessionUser, isFullAdmin, type SessionUser } from './auth';
 import { serverNow } from './clock';
 import { env } from './env';
 
@@ -134,10 +134,16 @@ export interface PublicRouteContextArgs<P> {
 
 type NextRouteContext<P> = { params: Promise<P> };
 
+export interface AuthedOptions {
+  /** للأدمن ذي الصلاحيات الكاملة فقط (المستخدمون والصلاحيات والمباني ودورات المياه والإعدادات والأوزان) */
+  fullAdmin?: boolean;
+}
+
 /** غلاف موحّد لنقاط النهاية المحمية: الجلسة + الدور + CSRF + معالجة الأخطاء */
 export function authed<P = Record<string, string>>(
   roles: Role[],
   handler: (ctx: RouteContextArgs<P>) => Promise<unknown>,
+  options: AuthedOptions = {},
 ) {
   return async (req: NextRequest, context: NextRouteContext<P>) => {
     try {
@@ -145,6 +151,7 @@ export function authed<P = Record<string, string>>(
       const user = await getSessionUser();
       if (!user) throw new ApiError(401, 'unauthenticated', MSG.unauthenticated);
       if (!roles.includes(user.role)) throw new ApiError(403, 'forbidden', MSG.forbidden);
+      if (options.fullAdmin && !isFullAdmin(user)) throw new ApiError(403, 'forbidden', MSG.forbidden);
       const params = (await context.params) ?? ({} as P);
       const now = await serverNow();
       const result = await handler({ req, user, params, now });
@@ -177,4 +184,9 @@ export function publicRoute<P = Record<string, string>>(
 export function dbErrorCode(error: { message?: string; code?: string } | null | undefined): string | null {
   if (!error) return null;
   return error.message ?? error.code ?? 'db_error';
+}
+
+/** نقطة نهاية للأدمن ذي الصلاحيات الكاملة فقط (الأدمن المحدود يحصل على 403) */
+export function fullAdminRoute<P = Record<string, string>>(handler: (ctx: RouteContextArgs<P>) => Promise<unknown>) {
+  return authed<P>(['admin'], handler, { fullAdmin: true });
 }
