@@ -1,9 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Modal } from '@/components/ui/overlay';
-import { averageBrightness, CAMERA_ERROR_MESSAGE, grabFrame, useCameraStream } from '@/lib/client/camera';
-
-const DARK_THRESHOLD = 60;
+import { CAMERA_ERROR_MESSAGE, grabFrame, rotateBlob, streamIsSideways, useCameraStream } from '@/lib/client/camera';
 
 const LABOR_TIPS = [
   'أمسك الجوال عموديًا (طوليًا) وصوّر العامل بكامل هيئته من الرأس إلى القدمين.',
@@ -66,7 +64,9 @@ export function CameraCapture({
   onCapture: (blob: Blob) => void;
 }) {
   const [step, setStep] = useState<'guide' | 'camera' | 'review'>('guide');
-  const [shot, setShot] = useState<{ blob: Blob; url: string; landscape: boolean; dark: boolean } | null>(null);
+  const [shot, setShot] = useState<{ blob: Blob; url: string } | null>(null);
+  /** البث يصل عرضيًا والجوال عمودي: تُدار المعاينة الحية كما ستُحفظ الصورة */
+  const [sideways, setSideways] = useState(false);
   const [openedAt, setOpenedAt] = useState(false);
   const { videoRef, error, ready, retry } = useCameraStream(open && step === 'camera');
 
@@ -92,8 +92,16 @@ export function CameraCapture({
     if (!canvas) return;
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
     if (!blob) return;
-    setShot({ blob, url: URL.createObjectURL(blob), landscape: canvas.width > canvas.height, dark: averageBrightness(canvas) < DARK_THRESHOLD });
+    setShot({ blob, url: URL.createObjectURL(blob) });
     setStep('review');
+  }
+
+  async function rotate() {
+    if (!shot) return;
+    const blob = await rotateBlob(shot.blob);
+    if (!blob) return;
+    URL.revokeObjectURL(shot.url);
+    setShot({ blob, url: URL.createObjectURL(blob) });
   }
 
   function retake() {
@@ -131,7 +139,6 @@ export function CameraCapture({
             <Example kind="dark" />
             <Example kind="blurry" />
           </div>
-          <div className="rounded-[10px] bg-[#FBF4E1] px-3 py-2 text-[12.5px] text-[#7A5B14]">لا يمكن رفع صورة محفوظة على الجهاز؛ تُلتقط الصورة الآن من الكاميرا.</div>
           <button type="button" onClick={() => setStep('camera')} className="touch-target rounded-[12px] bg-brand px-4 py-3 text-[15px] font-semibold text-white" data-testid="camera-start">
             فهمت، افتح الكاميرا
           </button>
@@ -149,7 +156,16 @@ export function CameraCapture({
             </div>
           ) : (
             <div className="relative mx-auto aspect-[3/4] w-full max-w-[360px] overflow-hidden rounded-[16px] bg-[#1E2B27]">
-              <video ref={videoRef} playsInline muted autoPlay className="h-full w-full object-cover" data-testid="camera-video" />
+              <video
+                ref={videoRef}
+                playsInline
+                muted
+                autoPlay
+                onLoadedMetadata={(e) => setSideways(streamIsSideways(e.currentTarget))}
+                onResize={(e) => setSideways(streamIsSideways(e.currentTarget))}
+                className={sideways ? 'absolute top-1/2 left-1/2 h-[75%] w-[133.334%] -translate-x-1/2 -translate-y-1/2 -rotate-90 object-cover' : 'h-full w-full object-cover'}
+                data-testid="camera-video"
+              />
               <span className="pointer-events-none absolute inset-[8%] rounded-[14px] border-2 border-dashed border-white/70" aria-hidden />
               {!ready && <span className="absolute inset-0 flex items-center justify-center text-[13px] text-white">جارٍ تشغيل الكاميرا…</span>}
             </div>
@@ -171,12 +187,9 @@ export function CameraCapture({
         <div className="flex flex-col gap-3 pb-3" data-testid="camera-review">
           {/* eslint-disable-next-line @next/next/no-img-element -- معاينة محلية لصورة ملتقطة */}
           <img src={shot.url} alt="معاينة الصورة الملتقطة" className="mx-auto max-h-[420px] w-auto max-w-full rounded-[14px] border border-line object-contain" />
-          {(shot.landscape || shot.dark) && (
-            <div className="rounded-[10px] bg-[#FBF4E1] px-3 py-2 text-[12.5px] leading-[1.7] text-[#7A5B14]" role="status" data-testid="camera-quality-warning">
-              {shot.landscape && 'الصورة أفقية؛ الأفضل إعادة الالتقاط والجوال عمودي. '}
-              {shot.dark && 'الصورة مظلمة؛ انتقل لمكان أفضل إضاءة وأعد الالتقاط.'}
-            </div>
-          )}
+          <button type="button" onClick={rotate} className="touch-target self-center rounded-[12px] border border-line bg-white px-4 py-2 text-[13.5px] font-semibold text-ink" data-testid="camera-rotate">
+            ↻ تدوير الصورة
+          </button>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={retake} className="touch-target rounded-[12px] border border-line bg-white px-4 py-3 text-[14.5px] font-semibold text-ink" data-testid="camera-retake">
               إعادة الالتقاط

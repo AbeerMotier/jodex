@@ -242,6 +242,15 @@ test('صورة العمالة إلزامية وبالكاميرا فقط: الخ
   await page.getByTestId('camera-start').click();
   await expect(page.getByTestId('camera-shoot')).toBeEnabled({ timeout: 20_000 });
   await page.getByTestId('camera-shoot').click();
+  // الكاميرا الوهمية تبث عرضيًا والشاشة عمودية ← الصورة تُصحَّح طولية تلقائيًا، ولا تحذيرات صفراء، وزر التدوير متاح
+  const preview = page.getByTestId('camera-review').locator('img');
+  await expect(preview).toBeVisible();
+  const size = await preview.evaluate((img: HTMLImageElement) => ({ w: img.naturalWidth, h: img.naturalHeight }));
+  expect(size.h).toBeGreaterThan(size.w);
+  await expect(page.getByTestId('camera-quality-warning')).toHaveCount(0);
+  await page.getByTestId('camera-rotate').click();
+  await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.naturalWidth > img.naturalHeight)).toBe(true);
+  await page.getByTestId('camera-rotate').click();
   await page.getByTestId('camera-accept').click();
   await expect(labor.locator('button[aria-label="عرض صورة العمالة"]')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('photos-progress')).toHaveText('5 من 5 صور إلزامية');
