@@ -474,10 +474,13 @@ test('«جولة المراقب غير مطابقة للواقع» لا تدخل
   const before = await staff();
   expect(before.s).toBe(100);
 
-  // تقييم منخفض مع «غير مطابقة» ← لا يغيّر أداء المراقب
-  sup.at = at(date, '09:30');
-  const mismatch = await evaluateSite(sup, w.rooms.a.id, () => 1, { matchesRound: 'no', note: 'الجولة المسجلة لا تطابق الواقع' });
+  // تقييم منخفض مع «غير مطابقة» من مشرف ثانٍ (تقييم واحد في اليوم لكل مشرف وموقع) ← لا يغيّر أداء المراقب
+  await admin.json(admin.put(`/api/admin/users/${w.users.sup2.id}/restrooms`, { restroomIds: [w.rooms.c.id, w.rooms.a.id] }));
+  const sup2 = await Api.as(w.users.sup2, at(date, '09:30'));
+  const mismatch = await evaluateSite(sup2, w.rooms.a.id, () => 1, { matchesRound: 'no', note: 'الجولة المسجلة لا تطابق الواقع' });
   expect(mismatch.res.status(), await mismatch.res.text()).toBe(200);
+  await admin.json(admin.put(`/api/admin/users/${w.users.sup2.id}/restrooms`, { restroomIds: [w.rooms.c.id] }));
+  await sup2.dispose();
   const after = await staff();
   expect(after).toMatchObject({ s: before.s, q: before.q });
 

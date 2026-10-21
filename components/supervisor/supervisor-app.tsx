@@ -55,8 +55,7 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
   const now = useServerClock(data?.serverNow, 15_000);
   const [siteId, setSiteId] = useState<string | null>(null);
   /** رقم بدء التقييم: يزيد بعد كل إرسال لبدء تقييم جديد للموقع نفسه */
-  const [evalNonce, setEvalNonce] = useState(0);
-  const [evaluation, setEvaluation] = useState<(Evaluation & { siteId: string; nonce: number }) | null>(null);
+  const [evaluation, setEvaluation] = useState<(Evaluation & { siteId: string }) | null>(null);
   const [form, setForm] = useState<EvalForm>(EMPTY_FORM);
   const [roundsOpen, setRoundsOpen] = useState(false);
   const [roundsResult, setRounds] = useState<{ evaluationId: string; data: ContractorRoundsData } | null>(null);
@@ -79,14 +78,17 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
     if (pick) setSiteId(pick.id);
   }
 
+  // تقييم واحد في اليوم لكل موقع: الموقع المقيَّم اليوم لا يُفتح له نموذج جديد
+  const doneAt = data?.sites.find((s) => s.id === siteId)?.lastSubmittedAt ?? null;
+
   // بدء (أو استئناف) تقييم الموقع المحدد على الخادم (يتحقق الخادم أنه مسند للمشرف)
   useEffect(() => {
-    if (!siteId) return;
+    if (!siteId || doneAt) return;
     let cancelled = false;
     api<Evaluation>('/api/supervisor/evaluations/start', { body: { restroomId: siteId } })
       .then((res) => {
         if (cancelled) return;
-        setEvaluation({ ...res, siteId, nonce: evalNonce });
+        setEvaluation({ ...res, siteId });
         setForm(loadForm(userId, res.evaluationId));
         setIdemKey(newIdempotencyKey());
       })
@@ -96,9 +98,9 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
     return () => {
       cancelled = true;
     };
-  }, [siteId, evalNonce, toast, userId]);
+  }, [siteId, toast, userId, doneAt]);
 
-  const evalLoading = siteId !== null && (evaluation?.siteId !== siteId || evaluation?.nonce !== evalNonce);
+  const evalLoading = siteId !== null && evaluation?.siteId !== siteId;
   const rounds = roundsResult && evaluation && roundsResult.evaluationId === evaluation.evaluationId ? roundsResult.data : null;
 
   function update(patch: Partial<EvalForm>) {
@@ -220,8 +222,8 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
         meta: `وقت التقييم ${timeHM(res.submittedAt)}`,
       });
       setForm(EMPTY_FORM);
+      // بعد التحديث يظهر «تم تقييم هذا الموقع اليوم» بدل النموذج
       reload();
-      setEvalNonce((n) => n + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       const err = e as ApiClientError;
@@ -318,7 +320,19 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
         </Card>
       )}
 
-      {!siteId ? null : evalLoading || !evaluation ? (
+      {siteId && doneAt && (
+        <Card className="animate-pop px-[22px] py-7 text-center" data-testid="evaluated-today">
+          <div className="mx-auto mb-3 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-ok-bg text-[24px] text-ok-ink" aria-hidden>
+            ✓
+          </div>
+          <div className="text-[18px] font-bold">تم تقييم هذا الموقع اليوم</div>
+          <div className="mt-1.5 text-[14px] leading-[1.7] text-muted">
+            أرسلت تقييمك الساعة <b className="tabular">{timeHM(doneAt)}</b>. التقييم مرة واحدة في اليوم لكل موقع.
+          </div>
+        </Card>
+      )}
+
+      {!siteId || doneAt ? null : evalLoading || !evaluation ? (
         <SkeletonCard lines={6} />
       ) : (
         <>

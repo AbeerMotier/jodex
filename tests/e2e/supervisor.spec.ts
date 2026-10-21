@@ -5,11 +5,13 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { serviceClient } from '../support/world';
-import { Api, at, browserAs, closeAll, computedColors, evaluateSite, rgb, world } from './helpers';
+import { addDays, Api, at, browserAs, closeAll, computedColors, evaluateSite, rgb, world } from './helpers';
 
 let sup: Api;
 let admin: Api;
 const DAY = '2042-03-05';
+/** تقييم واحد في اليوم لكل موقع: قواعد الملاحظات تُختبر في يوم مستقل */
+const NOTES_DAY = '2042-03-07';
 
 test.beforeAll(async () => {
   const w = world();
@@ -41,46 +43,54 @@ test('سؤال المطابقة مرفوض قبل فتح «تحقق رقابي»
 
   const view = await sup.json<{ rounds: unknown[] }>(sup.get(`/api/supervisor/sites/${w.rooms.a.id}/contractor-rounds?evaluationId=${start.evaluationId}`));
   expect(Array.isArray(view.rounds)).toBe(true);
+  // الإجابة عن السؤالين إلزامية
+  const missing = await sup.post('/api/supervisor/evaluations', { ...body, matchesRound: null, idempotencyKey: randomUUID() });
+  expect(missing.status()).toBe(422);
+  expect((await missing.json()).error).toMatchObject({ missingMatch: true });
   const ok = await sup.post('/api/supervisor/evaluations', body);
   expect(ok.status(), await ok.text()).toBe(200);
   expect(await ok.json()).toMatchObject({ score: 100, note: null });
 
-  // الإجابة عن السؤالين إلزامية
-  const again = await sup.json<{ evaluationId: string }>(sup.post('/api/supervisor/evaluations/start', { restroomId: w.rooms.a.id }));
-  await sup.get(`/api/supervisor/sites/${w.rooms.a.id}/contractor-rounds?evaluationId=${again.evaluationId}`);
-  const missing = await sup.post('/api/supervisor/evaluations', { ...body, evaluationId: again.evaluationId, matchesRound: null, idempotencyKey: randomUUID() });
-  expect(missing.status()).toBe(422);
-  expect((await missing.json()).error).toMatchObject({ missingMatch: true });
+  // تقييم واحد في اليوم لنفس الموقع: لا تقييم جديد بعد الإرسال حتى اليوم التالي
+  sup.at = at(DAY, '12:00');
+  const again = await sup.post('/api/supervisor/evaluations/start', { restroomId: w.rooms.a.id });
+  expect(again.status()).toBe(409);
+  expect((await again.json()).error).toMatchObject({ code: 'evaluated_today' });
+  sup.at = at('2042-03-06', '07:00');
+  expect((await sup.post('/api/supervisor/evaluations/start', { restroomId: w.rooms.a.id })).status()).toBe(200);
 });
 
 test('ملاحظة إلزامية مع تقييم ≤ 2، وإنشاء الملاحظة وأهميتها حسب القاعدة', async () => {
   const w = world();
-  sup.at = at(DAY, '11:00');
+  const sup2 = await Api.as(w.users.sup2, at(NOTES_DAY, '11:15'));
+  sup.at = at(NOTES_DAY, '11:00');
   // تقييم 2 بلا ملاحظة ← مرفوض
   const noNote = await evaluateSite(sup, w.rooms.b.id, (_, i) => (i === 0 ? 2 : 5));
   expect(noNote.res.status()).toBe(422);
   expect((await noNote.res.json()).error).toMatchObject({ noteRequired: true });
 
   // بند منخفض واحد + ملاحظة ← متوسطة
-  sup.at = at(DAY, '11:05');
+  sup.at = at(NOTES_DAY, '11:05');
   const mid = await evaluateSite(sup, w.rooms.b.id, (_, i) => (i === 0 ? 2 : 5), { note: 'أرضية مبللة عند المدخل' });
   expect(mid.res.status(), await mid.res.text()).toBe(200);
   expect(await mid.res.json()).toMatchObject({ note: { severity: 'mid', text: 'أرضية مبللة عند المدخل' } });
 
-  // أكثر من بند منخفض ← عالية
-  sup.at = at(DAY, '11:10');
-  const high = await evaluateSite(sup, w.rooms.b.id, (_, i) => (i < 2 ? 1 : 4), { note: 'عدة مشكلات تحتاج تدخلًا', needsUrgent: 'yes' });
+  // أكثر من بند منخفض ← عالية (موقع آخر: تقييم واحد في اليوم لكل موقع)
+  sup.at = at(NOTES_DAY, '11:10');
+  const high = await evaluateSite(sup, w.rooms.a.id, (_, i) => (i < 2 ? 1 : 4), { note: 'عدة مشكلات تحتاج تدخلًا', needsUrgent: 'yes' });
   expect(await high.res.json()).toMatchObject({ note: { severity: 'high' } });
 
   // ملاحظة نصية بلا بنود منخفضة ← منخفضة؛ وتقييم 3 لا يجعل الملاحظة إلزامية
-  sup.at = at(DAY, '11:15');
-  const low = await evaluateSite(sup, w.rooms.a.id, () => 3, { note: 'يُنصح بزيادة المناديل' });
+  const low = await evaluateSite(sup2, w.rooms.c.id, () => 3, { note: 'يُنصح بزيادة المناديل' });
   expect(await low.res.json()).toMatchObject({ score: 60, note: { severity: 'low' } });
-  sup.at = at(DAY, '11:20');
+  sup.at = at(addDays(NOTES_DAY, 1), '11:20');
   const none = await evaluateSite(sup, w.rooms.a.id, () => 4);
   expect(await none.res.json()).toMatchObject({ score: 80, note: null });
+  await sup2.dispose();
 
+  admin.at = at(NOTES_DAY, '23:59');
   const notes = await admin.json<{ rows: NoteRow[] }>(admin.get(`/api/admin/notes?period=today&building=${w.building.id}`));
+  admin.at = at(DAY, '23:59');
   const texts = notes.rows.map((n) => [n.text, n.severity]);
   expect(texts).toEqual(
     expect.arrayContaining([
@@ -90,13 +100,13 @@ test('ملاحظة إلزامية مع تقييم ≤ 2، وإنشاء المل�
     ]),
   );
   expect(notes.rows).toHaveLength(3);
-  expect(notes.rows.every((n) => n.supervisor === w.users.sup.name)).toBe(true);
+  expect(notes.rows.map((n) => n.supervisor).sort()).toEqual([w.users.sup.name, w.users.sup.name, w.users.sup2.name].sort());
 });
 
 test('قواعد الالتزام لا تُطبَّق على تقييمات المشرفين (تقييم بعد آخر موعد للجولات مقبول بلا درجة التزام)', async () => {
   const w = world();
   sup.at = at(DAY, '23:30');
-  const late = await evaluateSite(sup, w.rooms.a.id, () => 5);
+  const late = await evaluateSite(sup, w.rooms.b.id, () => 5);
   expect(late.res.status(), await late.res.text()).toBe(200);
   const body = await late.res.json();
   expect(body.score).toBe(100);
@@ -132,6 +142,13 @@ test('واجهة المشرف: أزرار المطابقة معطلة قبل «�
     await page.getByTestId('urgent-no').click();
     await page.getByTestId('submit-evaluation').click();
     await expect(page.getByTestId('success-dialog')).toBeVisible();
+    // بعد الإرسال: الموقع مقيَّم اليوم، فلا نموذج جديد حتى عند مسح الرمز مرة أخرى
+    await page.getByTestId('success-dialog').getByRole('button', { name: 'تم' }).click();
+    await expect(page.getByTestId('evaluated-today')).toContainText('تم تقييم هذا الموقع اليوم');
+    await expect(page.getByTestId('submit-evaluation')).toHaveCount(0);
+    await page.goto(`/go/${w.rooms.b.code}`);
+    await expect(page.getByTestId('evaluated-today')).toBeVisible();
+    await expect(page.getByTestId('submit-evaluation')).toHaveCount(0);
     expect(s.errors).toEqual([]);
   } finally {
     await closeAll(s.context);
@@ -140,15 +157,21 @@ test('واجهة المشرف: أزرار المطابقة معطلة قبل «�
 
 test('ألوان الفئة حسب ملف الهوية في الملاحظات والسجل', async ({ browser }) => {
   const w = world();
+  // الملاحظات في يوم اختبار الملاحظات، والسجل (مشرف + مراقب) في يوم الاختبار الأساسي
+  const n = await browserAs(browser, w.users.admin, at(NOTES_DAY, '23:59'));
+  try {
+    await n.page.goto(`/admin/notes?period=today&building=${w.building.id}`);
+    await expect(n.page.getByTestId('note-card').first()).toBeVisible();
+    const noteChips = await computedColors(n.page, '[data-testid="note-card"] [data-role-chip]');
+    expect(noteChips.length).toBeGreaterThan(0);
+    for (const c of noteChips) expect(c).toMatchObject({ color: rgb('#2F4F44'), background: rgb('#E0EEE6'), text: 'المشرف الميداني' });
+    expect(n.errors).toEqual([]);
+  } finally {
+    await closeAll(n.context);
+  }
   const s = await browserAs(browser, w.users.admin, at(DAY, '23:59'));
   try {
     const page = s.page;
-    await page.goto(`/admin/notes?period=today&building=${w.building.id}`);
-    await expect(page.getByTestId('note-card').first()).toBeVisible();
-    const noteChips = await computedColors(page, '[data-testid="note-card"] [data-role-chip]');
-    expect(noteChips.length).toBeGreaterThan(0);
-    for (const c of noteChips) expect(c).toMatchObject({ color: rgb('#2F4F44'), background: rgb('#E0EEE6'), text: 'المشرف الميداني' });
-
     await page.goto(`/admin/rounds?period=today&building=${w.building.id}`);
     await expect(page.getByTestId('log-row').first()).toBeVisible();
     const sup = await computedColors(page, '[data-testid="log-row"] [data-role-chip="supervisor"]');

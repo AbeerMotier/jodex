@@ -1,5 +1,5 @@
 import 'server-only';
-import { restroomLabel } from '@/lib/domain/format';
+import { restroomLabel, timeHM } from '@/lib/domain/format';
 import { randomUUID } from 'node:crypto';
 import { ANSWER_LABEL, DISPLAY_STATUS, MAX_SUPERVISOR_PHOTOS, SHIFT_LABEL } from '@/lib/domain/catalog';
 import { periodRange, riyadhDate, riyadhMinuteOfDay } from '@/lib/domain/time';
@@ -72,8 +72,27 @@ export async function supervisorSites(user: SessionUser, now: Date) {
   };
 }
 
+/** تقييم واحد في اليوم لكل موقع: تقييم المشرف المرسل اليوم لنفس الموقع (غير التقييم المحدد إن وُجد) */
+async function assertNotEvaluatedToday(user: SessionUser, restroomId: string, now: Date, exceptId: string | null = null) {
+  const range = periodRange('today', riyadhDate(now));
+  let query = createServiceClient()
+    .from('supervisor_evaluations')
+    .select('id, submitted_at')
+    .eq('supervisor_id', user.id)
+    .eq('restroom_id', restroomId)
+    .gte('submitted_at', range.fromInstant.toISOString())
+    .lt('submitted_at', range.toInstantExclusive.toISOString())
+    .limit(1);
+  if (exceptId) query = query.neq('id', exceptId);
+  const { data } = await query.maybeSingle();
+  if (data?.submitted_at) {
+    throw new ApiError(409, 'evaluated_today', `قيّمت هذا الموقع اليوم الساعة ${timeHM(data.submitted_at)}. التقييم مرة واحدة في اليوم لكل موقع.`);
+  }
+}
+
 export async function startEvaluation(user: SessionUser, restroomId: string, now: Date) {
   await assertAssigned(user, restroomId);
+  await assertNotEvaluatedToday(user, restroomId, now);
   const svc = createServiceClient();
   const range = periodRange('today', riyadhDate(now));
   const { data: open } = await svc
@@ -276,6 +295,7 @@ export async function submitEvaluation(user: SessionUser, input: EvaluationSubmi
     }
     throw new ApiError(409, 'evaluation_already_submitted', 'تم إرسال هذا التقييم مسبقًا ولا يمكن تعديله.');
   }
+  await assertNotEvaluatedToday(user, evaluation.restroom_id, now, evaluation.id);
 
   // سؤال المطابقة مرفوض قبل فتح «تحقق رقابي» (يُتحقق منه على الخادم)
   if (input.matchesRound !== null && !evaluation.viewed_contractor_rounds) {
