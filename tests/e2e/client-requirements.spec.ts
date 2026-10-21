@@ -9,7 +9,7 @@ import jsQR from 'jsqr';
 import sharp from 'sharp';
 import { cameraJpeg, galleryJpeg, jpegWithGps } from '../support/images';
 import { serviceClient } from '../support/world';
-import { addDays, answersFor, Api, at, BASE, browserAs, clockHeaders, closeAll, evaluateSite, freshIp, monitorToday, roundOf, submitRound, uploadRequiredPhotos, world } from './helpers';
+import { addDays, answersFor, Api, at, BASE, browserAs, clockHeaders, closeAll, evaluateSite, freshIp, monitorToday, roundOf, scanRestroom, submitRound, uploadRequiredPhotos, world } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -163,6 +163,8 @@ test('نوافذ الجولات: الصباحية 07:30–10:00 والمسائي
 
   // المسائية: 11:59 مرفوضة، 12:00–14:30 مسموحة
   api.at = at(D_WIN, '11:59');
+  // مسح الصباح انتهت صلاحيته (3 ساعات): يمسح الرمز من جديد للمسائية
+  await scanRestroom(api, data.restroom.code);
   expect((await api.put(`/api/monitor/rounds/${pm.id}/draft`, { answers: {}, note: '' })).status()).toBe(409);
   api.at = at(D_WIN, '12:00');
   await uploadRequiredPhotos(api, pm.id);
@@ -173,7 +175,7 @@ test('نوافذ الجولات: الصباحية 07:30–10:00 والمسائي
 
   // الواجهة قبل النافذة: رسالة بالوقت ولا نموذج (يوم آخر لم تُغلق جولاته بعد)
   const { context, page } = await browserAs(browser, w.users.m3, at(addDays(D_WIN, 3), '07:00'));
-  await page.goto('/monitor');
+  await page.goto(`/go/${w.rooms.c.code}`);
   await expect(page.getByTestId('round-window-closed')).toContainText('07:30');
   await expect(page.getByTestId('round-window-closed')).toContainText('10:00');
   await expect(page.getByTestId('submit-round')).toHaveCount(0);
@@ -225,7 +227,7 @@ test('صورة العمالة إلزامية وبالكاميرا فقط: الخ
   await page.fill('input[name=username]', w.users.m3.username);
   await page.fill('input[name=password]', w.users.m3.password);
   await Promise.all([page.waitForURL((u) => !u.pathname.startsWith('/login')), page.click('button[type=submit]')]);
-  await page.goto('/monitor');
+  await page.goto(`/go/${w.rooms.c.code}`);
   await page.getByTestId('shift-am').click();
   const labor = page.getByTestId('photo-labor');
   await expect(labor).toContainText('التقاط بالكاميرا');
@@ -480,4 +482,46 @@ test('«جولة المراقب غير مطابقة للواقع» لا تدخل
   expect(verification).toContain('مطابقة');
   expect(verification).toContain('غير مطابقة');
   await closeAll(sup, admin);
+});
+
+test('المراقب لا يفتح جولة دورة مياه إلا بمسح رمز QR لها: القائمة للاطلاع فقط، والخادم يرفض العمل بلا مسح', async ({ browser }) => {
+  const w = world();
+  const date = '2042-11-18';
+  const api = await Api.as(w.users.m1, at(date, '08:00'));
+  const before = await monitorToday(api, { scan: false });
+  expect(before.scanned).toBe(false);
+  const am = roundOf(before, 'am');
+  // بلا مسح: لا مسودة ولا صور ولا إرسال
+  const draft = await api.put(`/api/monitor/rounds/${am.id}/draft`, { answers: {}, note: '' });
+  expect(draft.status()).toBe(403);
+  expect((await draft.json()).error.code).toBe('scan_required');
+  expect((await api.upload(`/api/monitor/rounds/${am.id}/photos/tools`, await jpegWithGps(3), 'p.jpg', 'image/jpeg', { source: 'camera' })).status()).toBe(403);
+  expect((await submitRound(api, am.id, answersFor(before, 'done'))).status()).toBe(403);
+  // كوكي مسح مزوّرة لا تُقبل
+  const forged = await api.ctx.put(`/api/monitor/rounds/${am.id}/draft`, { headers: { ...api.headers(), cookie: 'jodex_scan=eyJ4Ijo5OTk5OTk5OTk5OTk5OX0.bad' }, data: { answers: {}, note: '' } });
+  expect(forged.status()).toBe(403);
+  // بعد المسح: يعمل
+  expect(await scanRestroom(api, w.rooms.a.code)).toBe(`/monitor?restroom=${w.rooms.a.id}`);
+  const after = await api.json<{ scanned: boolean }>(api.get(`/api/monitor/today?restroom=${w.rooms.a.id}`));
+  expect(after.scanned).toBe(true);
+  await api.json(api.put(`/api/monitor/rounds/${am.id}/draft`, { answers: {}, note: 'بعد المسح' }));
+  await api.dispose();
+
+  // الواجهة: بلا مسح ← رسالة المسح وقائمة للاطلاع بلا أزرار، ولا بنود ولا جولات
+  const { context, page, errors } = await browserAs(browser, w.users.m1, at(date, '08:05'), { width: 390, height: 844 });
+  await page.goto(`/monitor?restroom=${w.rooms.a.id}`);
+  await expect(page.getByTestId('scan-required')).toContainText('امسح رمز QR');
+  const list = page.getByTestId('room-picker');
+  await expect(list).toContainText('للاطلاع');
+  await expect(list.getByTestId(`room-${w.rooms.a.code}`)).toBeVisible();
+  await expect(list.locator('button, a')).toHaveCount(0);
+  await expect(page.getByTestId('shift-am')).toHaveCount(0);
+  await expect(page.getByTestId('submit-round')).toHaveCount(0);
+  // المسح ← بنود الجولة
+  await page.goto(`/go/${w.rooms.a.code}`);
+  await expect(page.getByTestId('monitor-code')).toHaveText(w.rooms.a.code);
+  await expect(page.getByTestId('scan-required')).toHaveCount(0);
+  await expect(page.getByTestId('submit-round')).toBeVisible();
+  expect(errors).toEqual([]);
+  await context.close();
 });

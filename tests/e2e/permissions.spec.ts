@@ -53,6 +53,8 @@ test('مصفوفة الصلاحيات لنقاط القراءة: 401 للزائ�
 test('نقاط الكتابة مرفوضة لغير الدور المخوّل قبل أي معالجة', async () => {
   const w = world();
   const am = roundOf(await monitorToday(sessions.m1), 'am');
+  // النائب يمسح رمز دورة المياه نفسها أيضًا (فتح الجولة بالمسح فقط)
+  await monitorToday(sessions.sub);
   const writes: { method: 'post' | 'put'; path: string; body: unknown; allowed: RoleKey[] }[] = [
     { method: 'post', path: `/api/monitor/rounds/${am.id}/submit`, body: { answers: {}, idempotencyKey: randomUUID() }, allowed: ['m1', 'sub'] },
     { method: 'put', path: `/api/monitor/rounds/${am.id}/draft`, body: { answers: {}, note: '' }, allowed: ['m1', 'sub'] },

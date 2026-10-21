@@ -67,12 +67,12 @@ function Sidebar({ adminName, scope }: { adminName: string; scope: AdminScope })
 
   return (
     <aside
-      className="relative isolate flex flex-col gap-5 overflow-hidden bg-brand px-3.5 py-[22px] text-white md:sticky md:top-0 md:h-dvh md:w-[260px] md:flex-none md:overflow-y-auto"
+      className="sticky top-0 z-40 isolate flex max-h-dvh flex-col gap-3 overflow-x-hidden overflow-y-auto bg-brand px-3.5 py-2.5 text-white md:h-dvh md:w-[260px] md:flex-none md:gap-5 md:py-[22px]"
       data-testid="admin-sidebar"
     >
       <Decor variant="sidebar" />
       <div className="relative z-[1] flex items-center justify-between md:justify-center">
-        <Logo size="md" className="px-2 pt-2 pb-1.5" />
+        <Logo size="md" className="px-2 pt-1 pb-0.5 md:pt-2 md:pb-1.5" />
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -131,7 +131,7 @@ export function AdminShell({ adminName, scope = 'super', children }: { adminName
   const access: AdminAccess = { scope, canEdit: scope !== 'viewer', isSuper: scope === 'super' };
   return (
     <AccessContext.Provider value={access}>
-      <div className="flex min-h-dvh animate-[fadeIn_.3s_ease_both] flex-col md:flex-row">
+      <div className="flex min-h-dvh animate-[fadeIn_.3s_ease_both] flex-col overflow-x-clip md:flex-row">
         <Suspense fallback={<aside className="bg-brand md:h-dvh md:w-[260px]" />}>
           <Sidebar adminName={adminName} scope={scope} />
         </Suspense>

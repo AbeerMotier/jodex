@@ -341,7 +341,8 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
                   <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label={item.title}>
                     {([1, 2, 3, 4, 5] as Rating[]).map((v) => {
                       const on = form.ratings[item.id] === v;
-                      const low = v <= 2;
+                      // ضعيف/غير مرضي أحمر، «جيد» أصفر فاتح، جيد جدًا/ممتاز أخضر
+                      const tone = v <= 2 ? { bg: '#FCEDE7', c: '#B5512F', bd: '#E37452' } : v === 3 ? { bg: '#FDF6DC', c: '#94711C', bd: '#E9CF7A' } : { bg: '#E6F2EA', c: '#3F7A62', bd: '#8EC3A6' };
                       return (
                         <button
                           key={v}
@@ -352,9 +353,9 @@ export function SupervisorApp({ userId, initialSiteId = null }: { userId: string
                           onClick={() => update({ ratings: { ...form.ratings, [item.id]: v } })}
                           className="flex min-h-[52px] flex-col items-center justify-center gap-px rounded-[11px] border px-0.5 py-1 transition-[background-color,transform] duration-150 hover:-translate-y-px"
                           style={{
-                            background: on ? (low ? '#FCEDE7' : '#E6F2EA') : '#FFFFFF',
-                            color: on ? (low ? '#B5512F' : '#3F7A62') : '#2F4F44',
-                            borderColor: on ? (low ? '#E37452' : '#8EC3A6') : '#E3EAE6',
+                            background: on ? tone.bg : '#FFFFFF',
+                            color: on ? tone.c : '#2F4F44',
+                            borderColor: on ? tone.bd : '#E3EAE6',
                           }}
                         >
                           <span className="text-[12.5px] font-semibold">{RATING_LABEL[v]}</span>

@@ -221,6 +221,9 @@ test('المتصفح: المراقب يعبّئ الجولة ويرفع صورً
   const s = await browserAs(browser, w.users.m1, at(date, '09:10'), { width: 390, height: 844 });
   try {
     const page = s.page;
+    // الجولة تُفتح بمسح رمز QR لدورة المياه فقط
+    await page.goto(`/go/${today.restroom.code}`);
+    await page.waitForURL(/\/monitor\?restroom=/);
     await expect(page.getByTestId('monitor-name')).toContainText(w.users.m1.name);
     await expect(page.getByTestId('shift-status-am')).toHaveText('لم تكتمل');
     const groups = page.locator('[role="radiogroup"]:has([data-answer="done"])');

@@ -92,13 +92,26 @@ export interface TodayData {
   badge: { state: string; label: string };
   onBehalfOf: string | null;
   restroom: { name: string; code: string };
+  restrooms: { id: string; code: string }[];
+  scanned: boolean;
   user: { name: string; isSubstitute: boolean };
 }
 
 export const REQUIRED_SLOTS = ['tools', 'entry', 'sinks', 'general', 'labor'] as const;
 
-export async function monitorToday(api: Api): Promise<TodayData> {
-  return api.json<TodayData>(api.get('/api/monitor/today'));
+/** مسح رمز QR لدورة المياه (كفتح الرابط من كاميرا الجوال): المراقب لا يفتح جولتها إلا بعده */
+export async function scanRestroom(api: Api, code: string) {
+  const res = await api.ctx.get(`/go/${encodeURIComponent(code)}`, { headers: api.headers(), maxRedirects: 0 });
+  expect(res.status()).toBe(307);
+  return res.headers()['location'];
+}
+
+/** جولات اليوم لدورة المياه المعروضة؛ تُمسح أولًا (افتراضيًا) ليُسمح بالعمل عليها */
+export async function monitorToday(api: Api, options: { scan?: boolean } = {}): Promise<TodayData> {
+  const data = await api.json<TodayData>(api.get('/api/monitor/today'));
+  if (options.scan === false || data.scanned) return data;
+  await scanRestroom(api, data.restroom.code);
+  return { ...data, scanned: true };
 }
 
 export function roundOf(data: TodayData, shift: 'am' | 'pm'): TodayRound {

@@ -24,6 +24,7 @@ import { ApiError } from './http';
 import { namesById } from './people';
 import { assertFreshCapture, normalizePhoto, removePhotos, signPhotoUrls, storePhoto } from './photos';
 import { syncRounds } from './rounds-maintenance';
+import { scannedRestrooms } from './scan';
 import { createServiceClient, createUserClient } from './supabase';
 
 export interface MonitorScope {
@@ -104,6 +105,8 @@ export function deadlineMessage(shift: Shift) {
   return `انتهى الوقت المسموح لإنهاء الجولة (${minutesToHHMM(SHIFT_PLAN[shift].deadline)})`;
 }
 
+export const SCAN_REQUIRED = 'امسح رمز QR الملصق على دورة المياه بكاميرا الجوال لفتح بنود جولتها.';
+
 export function notOpenMessage(shift: Shift) {
   return `لم يبدأ وقت ${SHIFT_LABEL[shift]} بعد. وقتها من ${windowText(shift)} بتوقيت الرياض.`;
 }
@@ -142,11 +145,12 @@ export async function loadMonitorToday(user: SessionUser, now: Date, requestedRe
   const minute = riyadhMinuteOfDay(now);
   const client = await createUserClient();
 
-  const [{ data: allRounds, error: rErr }, { data: roomRows, error: roomErr }, items, settings] = await Promise.all([
+  const [{ data: allRounds, error: rErr }, { data: roomRows, error: roomErr }, items, settings, scans] = await Promise.all([
     client.from('rounds').select(ROUND_COLUMNS).in('restroom_id', scope.restroomIds).eq('round_date', today).order('shift'),
     client.from('restrooms').select('id, code, name, floor_label, building_id').in('id', scope.restroomIds),
     loadActiveItemsByGroup(),
     loadSettings(),
+    scannedRestrooms(user.id, now),
   ]);
   if (rErr) throw new Error(rErr.message);
   if (roomErr) throw new Error(roomErr.message);
@@ -238,6 +242,8 @@ export async function loadMonitorToday(user: SessionUser, now: Date, requestedRe
     onBehalfOf: scope.isSubstitute ? scope.primaryName : null,
     restroom: { id: room.id, name: restroomLabel(room.name), code: room.code, floor: room.floor_label, building: building.name },
     restrooms: roomSummaries,
+    // بنود الجولة وأزرارها لا تُفتح إلا بعد مسح رمز QR لدورة المياه نفسها
+    scanned: scans.has(room.id),
     notice:
       requestedRestroomId && !rooms.some((r) => r.id === requestedRestroomId)
         ? 'دورة المياه التي مسحت رمزها ليست ضمن دوراتك؛ عُرضت أول دورة مسندة إليك.'
@@ -267,6 +273,7 @@ async function openRoundForMonitor(user: SessionUser, roundId: string, now: Date
   if (!round || !scope.restroomIds.includes(round.restroom_id)) throw new ApiError(404, 'round_not_found', 'الجولة غير موجودة.');
   const r = round as RoundRow;
   if (r.round_date !== riyadhDate(now)) throw new ApiError(409, 'not_today', 'لا يمكن العمل على جولة يوم آخر.');
+  if (!(await scannedRestrooms(user.id, now)).has(r.restroom_id)) throw new ApiError(403, 'scan_required', SCAN_REQUIRED);
   return { scope, round: r };
 }
 

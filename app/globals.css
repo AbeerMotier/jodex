@@ -133,6 +133,8 @@
   body {
     @apply bg-page text-ink font-sans antialiased;
     font-feature-settings: 'kern';
+    /* لا انزلاق جانبي للصفحة على الجوال (الجداول العريضة تمرَّر داخل حاويتها) */
+    overflow-x: clip;
   }
   :focus-visible {
     outline: 3px solid color-mix(in srgb, var(--color-brand) 55%, transparent);

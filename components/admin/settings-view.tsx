@@ -2,7 +2,6 @@
 import { useMemo, useState } from 'react';
 import { Chip } from '@/components/ui/chip';
 import { IconEdit, IconPlus, IconTrash } from '@/components/ui/icons';
-import { MixedText } from '@/components/ui/mixed-text';
 import { Modal } from '@/components/ui/overlay';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
@@ -208,10 +207,6 @@ export function SettingsView() {
       />
       {/* المطّلع: كل الحقول والأزرار معطلة (والخادم يرفض أي حفظ) */}
       <fieldset disabled={!canEdit} className="m-0 flex min-w-0 flex-col gap-[18px] border-0 p-0" data-testid="settings-form">
-      <div className="animate-fade-up rounded-[14px] bg-mint-3 px-4 py-3 text-[13.5px] leading-[1.7]">
-        <MixedText text="الأوزان تظهر للأدمن فقط. يجب أن يكون مجموع أوزان البنود الفعالة في كل مجموعة محتسبة 100%. مساهمة المعيار = (درجة المعيار ÷ 5) × وزن المعيار — مثال: وزن 18% وتقييم 5 = 18 نقطة، وتقييم 4 = 14.4 نقطة." />
-      </div>
-
       <div className="grid animate-fade-up grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] gap-[18px]">
         {SECTIONS.map((sec) => {
           const scored = ITEM_GROUP_SCORED[sec.group];

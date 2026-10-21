@@ -57,6 +57,8 @@ interface TodayData {
   onBehalfOf: string | null;
   restroom: { id: string; name: string; code: string; floor: string; building: string };
   restrooms: RoomSummary[];
+  /** مسح المراقب رمز QR لدورة المياه المعروضة (شرط فتح بنود جولتها) */
+  scanned: boolean;
   notice?: string | null;
   badge: { state: string; label: string; tone: Tone };
   defaultShift: Shift;
@@ -98,8 +100,8 @@ const OPTIONS: Answer[] = ['done', 'partial', 'not_done'];
 
 export function MonitorApp({ userId, initialRestroomId = null }: { userId: string; initialRestroomId?: string | null }) {
   const toast = useToast();
-  // دورة المياه المختارة (المراقب قد يكون مسؤولًا عن مبنى كامل)
-  const [roomId, setRoomId] = useState<string | null>(initialRestroomId);
+  // دورة المياه المفتوحة: من رمز QR الممسوح فقط (/go/[token])؛ قائمة الدورات المسندة للاطلاع
+  const roomId = initialRestroomId;
   const { data, error, loading, reload } = useApi<TodayData>(
     roomId ? `/api/monitor/today?restroom=${encodeURIComponent(roomId)}` : '/api/monitor/today',
   );
@@ -347,10 +349,14 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
             </Chip>
           </div>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
-            <InfoTile label="المبنى" value={data.restroom.building} />
-            <InfoTile label="الدور" value={data.restroom.floor} />
-            <InfoTile label="دورة المياه" value={data.restroom.name} />
-            <InfoTile label="الترميز" value={<span dir="ltr" className="tabular">{data.restroom.code}</span>} />
+            {data.scanned && (
+              <>
+                <InfoTile label="المبنى" value={data.restroom.building} />
+                <InfoTile label="الدور" value={data.restroom.floor} />
+                <InfoTile label="دورة المياه" value={data.restroom.name} />
+                <InfoTile label="الترميز" value={<span dir="ltr" className="tabular" data-testid="monitor-code">{data.restroom.code}</span>} />
+              </>
+            )}
             <InfoTile label="التاريخ" value={dayLabel(data.today)} />
             <InfoTile label="الوقت" value={<span className="tabular">{timeHM(now)}</span>} />
           </div>
@@ -362,10 +368,24 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
         </div>
       </GreenHero>
 
-      {data.restrooms.length > 1 && (
-        <RoomPicker rooms={data.restrooms} selectedId={data.restroom.id} busy={loading} onSelect={setRoomId} />
+      {!data.scanned && (
+        <Card className="animate-pop px-[22px] py-7 text-center" data-testid="scan-required">
+          <div className="mx-auto mb-3 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-mint-3 text-[24px]" aria-hidden>
+            ⌗
+          </div>
+          <div className="text-[18px] font-bold">امسح رمز QR لدورة المياه</div>
+          <div className="mt-1.5 text-[14px] leading-[1.7] text-muted">
+            افتح كاميرا الجوال ووجّهها إلى رمز QR الملصق على دورة المياه، فتُفتح بنود جولتها ومرفقاتها مباشرة. لا تُفتح الجولة من القائمة.
+          </div>
+        </Card>
       )}
 
+      {(data.restrooms.length > 1 || !data.scanned) && (
+        <RoomPicker rooms={data.restrooms} selectedId={data.scanned ? data.restroom.id : null} busy={loading} />
+      )}
+
+      {data.scanned && (
+      <>
       <div className="grid grid-cols-2 gap-3">
         {data.rounds.map((r) => {
           const on = r.shift === shift;
@@ -527,6 +547,8 @@ export function MonitorApp({ userId, initialRestroomId = null }: { userId: strin
             </button>
           </div>
         </>
+      )}
+      </>
       )}
 
       <CameraCapture
@@ -756,22 +778,18 @@ function MonitorSkeleton() {
 }
 
 /** قائمة دورات المياه المسندة للمراقب مع حالة جولات اليوم لكل منها */
-function RoomPicker({
-  rooms,
-  selectedId,
-  busy,
-  onSelect,
-}: {
-  rooms: RoomSummary[];
-  selectedId: string;
-  busy: boolean;
-  onSelect: (id: string) => void;
-}) {
+/** دورات المياه المسندة للمراقب: للاطلاع فقط (لا تُفتح جولة إلا بمسح رمز QR في الموقع) */
+function RoomPicker({ rooms, selectedId, busy }: { rooms: RoomSummary[]; selectedId: string | null; busy: boolean }) {
   const done = rooms.filter((r) => r.total > 0 && r.submitted === r.total).length;
   return (
     <Card className="flex flex-col gap-3 p-4" data-testid="room-picker">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[15px] font-bold text-ink">دورات المياه المسندة ({rooms.length})</h2>
+        <h2 className="flex items-center gap-2 text-[15px] font-bold text-ink">
+          دورات المياه المسندة ({rooms.length})
+          <Chip tone="neutral" size="xs">
+            للاطلاع
+          </Chip>
+        </h2>
         <span className="flex items-center gap-2 text-[12.5px] text-muted">
           {busy && <Spinner size={14} />}
           <span className="tabular">
@@ -783,13 +801,11 @@ function RoomPicker({
         {rooms.map((r) => {
           const on = r.id === selectedId;
           return (
-            <button
+            <div
               key={r.id}
-              type="button"
-              onClick={() => onSelect(r.id)}
-              aria-pressed={on}
+              aria-current={on ? 'true' : undefined}
               data-testid={`room-${r.code}`}
-              className="flex cursor-pointer flex-col gap-1.5 rounded-[12px] border border-line bg-white px-3 py-2.5 text-right"
+              className="flex flex-col gap-1.5 rounded-[12px] border border-line bg-white px-3 py-2.5 text-right"
               style={{ boxShadow: on ? '0 0 0 2px #2F4F44' : 'none' }}
             >
               <span className="flex w-full items-center justify-between gap-2">
@@ -809,7 +825,7 @@ function RoomPicker({
                   {r.badge.label}
                 </Chip>
               </span>
-            </button>
+            </div>
           );
         })}
       </div>
